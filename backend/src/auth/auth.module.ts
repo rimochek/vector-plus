@@ -14,13 +14,13 @@ import { PrismaModule } from '../prisma/prisma.module';
         secret: configService.get<string>('JWT_SECRET') ?? 'dev_secret',
         signOptions: {
           expiresIn:
-            Number(configService.get<string>('JWT_EXPIRATION')) || '3600',
+            Number(configService.get<string>('JWT_ACCESS_EXPIRATION')) || 900,
         },
       }),
     }),
   ],
   controllers: [AuthController],
   providers: [AuthService],
-  exports: [AuthService],
+  exports: [AuthService, JwtModule],
 })
 export class AuthModule {}
