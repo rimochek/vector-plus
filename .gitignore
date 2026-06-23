@@ -1,4 +1,5 @@
 .env.example
 .env
 
-/nginx/ssl/
+nginx/ssl/*
+!nginx/ssl/.gitkeep
