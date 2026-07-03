@@ -29,8 +29,8 @@ export function ProfileMenu({ user, size = "md" }: ProfileMenuProps) {
   const initials = getUserInitials(user)
   const avatarClass =
     size === "sm"
-      ? "flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[#8B5CF6] to-[#6366F1] text-xs font-black text-white ring-2 ring-white dark:ring-zinc-950"
-      : "flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-[#8B5CF6] to-[#6366F1] text-sm font-black text-white shadow-md shadow-violet-300/30 ring-2 ring-white transition hover:scale-105 dark:ring-zinc-950 dark:shadow-violet-950/40"
+      ? "flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-xs font-bold text-white ring-2 ring-white shadow-sm"
+      : "flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-sm font-bold text-white shadow-md ring-2 ring-white transition duration-150 hover:scale-105"
 
   useEffect(() => {
     if (!open) return
@@ -106,7 +106,7 @@ export function ProfileMenu({ user, size = "md" }: ProfileMenuProps) {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-50 mt-2 min-w-[220px] overflow-hidden rounded-2xl border border-slate-100 bg-white py-1.5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900"
+          className="absolute right-0 top-full z-50 mt-2 min-w-[220px] overflow-hidden rounded-2xl border border-slate-100 bg-white py-1.5 shadow-xl dark:border-[var(--border)] dark:bg-[var(--surface)]"
         >
           {menuItems.map((item) => {
             const Icon = item.icon
@@ -116,14 +116,14 @@ export function ProfileMenu({ user, size = "md" }: ProfileMenuProps) {
                 href={item.href}
                 role="menuitem"
                 onClick={() => setOpen(false)}
-                className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-violet-50 hover:text-[#8B5CF6] dark:text-zinc-200 dark:hover:bg-violet-950/40 dark:hover:text-violet-300"
+                className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-violet-50 hover:text-[var(--primary-from)] dark:text-zinc-200 dark:hover:bg-violet-950/40 dark:hover:text-violet-300"
               >
                 <Icon className="h-4 w-4 shrink-0" />
                 {item.label}
               </Link>
             )
           })}
-          <div className="my-1 border-t border-slate-100 dark:border-zinc-800" />
+          <div className="my-1 border-t border-slate-100 dark:border-[var(--border)]" />
           <button
             type="button"
             role="menuitem"

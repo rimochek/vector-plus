@@ -6,6 +6,7 @@ import { useTranslations } from "@/lib/i18n/locale-context"
 import type { MessageId } from "@/lib/i18n/messages"
 import { api } from "@/lib/api-client"
 import { useToast } from "@/lib/toast-context"
+import { normalizeTimeString, resolveAvailabilityTimeZone } from "@/lib/time-utils"
 
 /** Monday-first display order; values are JS Date.getDay(). */
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0] as const
@@ -78,7 +79,7 @@ export function WeeklyAvailabilityEditor({
   const { t } = useTranslations()
   const toast = useToast()
   const [schedule, setSchedule] = useState<WeekSchedule>(emptySchedule)
-  const [timezone, setTimezone] = useState("UTC")
+  const [timezone, setTimezone] = useState(() => resolveAvailabilityTimeZone())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
@@ -106,18 +107,14 @@ export function WeeklyAvailabilityEditor({
     setLoading(true)
     try {
       const data = await api.availability.getWeeklySchedule()
-      setTimezone(
-        data.timezone ||
-          Intl.DateTimeFormat().resolvedOptions().timeZone ||
-          "UTC",
-      )
+      setTimezone(resolveAvailabilityTimeZone(data.timezone))
       const next = emptySchedule()
       for (const day of data.schedule) {
         const d = day.dayOfWeek as DayOfWeek
         next[d] = day.slots.map((slot) => ({
           localId: crypto.randomUUID(),
-          startTime: slot.startTime,
-          endTime: slot.endTime,
+          startTime: normalizeTimeString(slot.startTime),
+          endTime: normalizeTimeString(slot.endTime),
         }))
       }
       setSchedule(next)
@@ -246,19 +243,19 @@ export function WeeklyAvailabilityEditor({
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-[#8B5CF6]" />
+        <Loader2 className="h-8 w-8 animate-spin text-[var(--primary-from)]" />
       </div>
     )
   }
 
   return (
-    <section className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:p-8">
+    <section className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm dark:border-[var(--border)] dark:bg-[var(--bg)] sm:p-8">
       <div className="mb-8 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-xl font-black text-[#1E293B] dark:text-zinc-100">
+          <h2 className="text-xl font-black text-[var(--text-primary)] dark:text-[var(--text-primary)]">
             {t("avail.weeklyTitle")}
           </h2>
-          <p className="mt-1 text-sm font-semibold text-slate-400 dark:text-zinc-500">
+          <p className="mt-1 text-sm font-semibold text-[var(--text-muted)]">
             {t("avail.weeklySubtitle")}
           </p>
         </div>
@@ -273,13 +270,13 @@ export function WeeklyAvailabilityEditor({
             key={day}
             className="grid grid-cols-1 gap-4 py-5 sm:grid-cols-[4.5rem_1fr_auto] sm:items-start sm:gap-6"
           >
-            <p className="pt-2 text-sm font-black text-[#1E293B] dark:text-zinc-100">
+            <p className="pt-2 text-sm font-black text-[var(--text-primary)] dark:text-[var(--text-primary)]">
               {t(dayLabelKey(day))}
             </p>
 
             <div className="min-w-0 space-y-3">
               {schedule[day].length === 0 ? (
-                <p className="py-2 text-sm font-semibold text-slate-400 dark:text-zinc-500">
+                <p className="py-2 text-sm font-semibold text-[var(--text-muted)]">
                   {t("avail.unavailable")}
                 </p>
               ) : (
@@ -298,7 +295,7 @@ export function WeeklyAvailabilityEditor({
                       onChange={(e) =>
                         patchSlot(day, slot.localId, { startTime: e.target.value })
                       }
-                      className="w-full min-w-[7.5rem] rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-[#1E293B] outline-none focus:border-[#8B5CF6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 sm:w-auto"
+                      className="w-full min-w-[7.5rem] rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-[var(--text-primary)] outline-none focus:border-[var(--primary-from)] dark:border-[var(--border)] dark:bg-[var(--surface)] dark:text-[var(--text-primary)] sm:w-auto"
                     />
                     <span className="hidden text-slate-300 sm:inline">–</span>
                     <span className="text-xs font-semibold text-slate-400 sm:hidden">
@@ -314,7 +311,7 @@ export function WeeklyAvailabilityEditor({
                       onChange={(e) =>
                         patchSlot(day, slot.localId, { endTime: e.target.value })
                       }
-                      className="w-full min-w-[7.5rem] rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-[#1E293B] outline-none focus:border-[#8B5CF6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 sm:w-auto"
+                      className="w-full min-w-[7.5rem] rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-[var(--text-primary)] outline-none focus:border-[var(--primary-from)] dark:border-[var(--border)] dark:bg-[var(--surface)] dark:text-[var(--text-primary)] sm:w-auto"
                     />
                     <button
                       type="button"
@@ -334,7 +331,7 @@ export function WeeklyAvailabilityEditor({
                 type="button"
                 onClick={() => addSlot(day)}
                 aria-label={t("avail.addSlot")}
-                className="rounded-xl border border-slate-200 p-2.5 text-slate-500 transition hover:border-violet-200 hover:bg-violet-50 hover:text-[#8B5CF6] dark:border-zinc-700 dark:hover:border-violet-800 dark:hover:bg-violet-950/30"
+                className="rounded-xl border border-slate-200 p-2.5 text-slate-500 transition hover:border-violet-200 hover:bg-violet-50 hover:text-[var(--primary-from)] dark:border-[var(--border)] dark:hover:border-violet-800 dark:hover:bg-violet-950/30"
               >
                 <Plus className="h-4 w-4" />
               </button>
@@ -342,7 +339,7 @@ export function WeeklyAvailabilityEditor({
                 type="button"
                 onClick={() => openCopy(day)}
                 aria-label={t("avail.copyHours")}
-                className="rounded-xl border border-slate-200 p-2.5 text-slate-500 transition hover:border-violet-200 hover:bg-violet-50 hover:text-[#8B5CF6] dark:border-zinc-700 dark:hover:border-violet-800 dark:hover:bg-violet-950/30"
+                className="rounded-xl border border-slate-200 p-2.5 text-slate-500 transition hover:border-violet-200 hover:bg-violet-50 hover:text-[var(--primary-from)] dark:border-[var(--border)] dark:hover:border-violet-800 dark:hover:bg-violet-950/30"
               >
                 <Copy className="h-4 w-4" />
               </button>
@@ -350,22 +347,22 @@ export function WeeklyAvailabilityEditor({
               {copySourceDay === day && (
                 <div
                   ref={popoverRef}
-                  className="absolute right-0 top-full z-20 mt-2 w-56 rounded-2xl border border-slate-100 bg-white p-4 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+                  className="absolute right-0 top-full z-20 mt-2 w-56 rounded-2xl border border-slate-100 bg-white p-4 shadow-xl dark:border-[var(--border)] dark:bg-[var(--surface)]"
                 >
-                  <p className="mb-3 text-sm font-black text-[#1E293B] dark:text-zinc-100">
+                  <p className="mb-3 text-sm font-black text-[var(--text-primary)] dark:text-[var(--text-primary)]">
                     {t("avail.copyTo")}
                   </p>
                   <div className="mb-4 max-h-48 space-y-2 overflow-y-auto">
                     {DAY_ORDER.filter((d) => d !== day).map((targetDay) => (
                       <label
                         key={targetDay}
-                        className="flex cursor-pointer items-center gap-3 rounded-xl px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-zinc-800"
+                        className="flex cursor-pointer items-center gap-3 rounded-xl px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-[var(--chip)]"
                       >
                         <input
                           type="checkbox"
                           checked={copyTargets.has(targetDay)}
                           onChange={() => toggleCopyTarget(targetDay)}
-                          className="h-4 w-4 rounded border-slate-300 text-[#8B5CF6] focus:ring-[#8B5CF6]"
+                          className="h-4 w-4 rounded border-slate-300 text-[var(--primary-from)] focus:ring-[var(--primary-from)]"
                         />
                         <span className="text-sm font-semibold text-slate-600 dark:text-zinc-300">
                           {t(dayLabelKey(targetDay))}
@@ -377,7 +374,7 @@ export function WeeklyAvailabilityEditor({
                     type="button"
                     disabled={copyTargets.size === 0}
                     onClick={applyCopy}
-                    className="w-full rounded-xl bg-[#1E293B] py-2.5 text-sm font-black text-white transition hover:bg-slate-800 disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white"
+                    className="w-full rounded-xl bg-black py-2.5 text-sm font-black text-white transition hover:bg-slate-800 disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white"
                   >
                     {t("avail.applyCopy")}
                   </button>
@@ -388,7 +385,7 @@ export function WeeklyAvailabilityEditor({
         ))}
       </div>
 
-      <div className="mt-8 flex flex-col gap-3 border-t border-slate-100 pt-6 dark:border-zinc-800 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mt-8 flex flex-col gap-3 border-t border-slate-100 pt-6 dark:border-[var(--border)] sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm font-semibold text-slate-400">
           {isDirty ? t("avail.unsavedHint") : t("avail.saved")}
         </p>
@@ -396,7 +393,7 @@ export function WeeklyAvailabilityEditor({
           type="button"
           disabled={saving}
           onClick={handleSave}
-          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#8B5CF6] px-8 py-3.5 text-sm font-black uppercase tracking-widest text-white transition hover:bg-violet-600 disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--primary-from)] px-8 py-3.5 text-sm font-black uppercase tracking-widest text-white transition hover:bg-violet-600 disabled:opacity-50"
         >
           {saving ? (
             <>

@@ -79,6 +79,13 @@ export type ApiTutor = {
   bio: string
   avatarUrl: string | null
   subject: string
+  tags?: string[]
+  subjects?: {
+    id: string
+    name: string
+    slug: string
+    hourlyRateCents: number
+  }[]
   defaultHourlyRateCents: number
   defaultCurrency: string
   rating: number
@@ -90,6 +97,43 @@ export type ApiTutor = {
   city: string | null
   verified: boolean
   timezone: string
+  applicationStatus?: string
+  applicationRejectionReason?: string | null
+  applicationSubmittedAt?: string | null
+  credentials?: { label: string; value: string }[]
+  verificationDocuments?: Array<{
+    id?: string
+    type: string
+    fileName: string
+    storageKey: string
+    status?: string
+    rejectionReason?: string | null
+  }>
+  languages?: string[]
+  occupation?: string | null
+  lessonFormats?: ("online" | "offline")[]
+}
+
+export type UpdateTutorProfilePayload = {
+  displayName?: string
+  headline?: string
+  bio?: string
+  defaultHourlyRateCents?: number
+  experienceYears?: number
+  education?: string
+  country?: string
+  city?: string
+  avatarUrl?: string
+  tags?: string[]
+  credentials?: { label: string; value: string }[]
+  verificationDocuments?: {
+    type: string
+    fileName: string
+    storageKey: string
+  }[]
+  languages?: string[]
+  occupation?: string
+  lessonFormats?: ("online" | "offline")[]
 }
 
 export type AvailabilitySlot = {
@@ -225,10 +269,124 @@ export type WeeklyScheduleResponse = {
   schedule: WeeklyDaySchedule[]
 }
 
+export type TutorDashboardLesson = {
+  id: string
+  status: "upcoming" | "completed" | "cancelled" | "pending"
+  scheduledStartAt: string
+  scheduledEndAt: string
+  durationMinutes: number
+  subject: string
+  studentName: string
+  studentAvatarUrl: string | null
+}
+
+export type TutorDashboardOverview = {
+  tutorProfileId: string
+  displayName: string
+  avatarUrl: string | null
+  stats: {
+    upcomingLessons: number
+    pendingRequests: number
+    totalStudents: number
+    profileViews: number
+    profileViewsThisWeek: number
+    profileCompletion: number
+    hoursTaught: number
+    avgRating: number | null
+  }
+  availability: {
+    timezone: string
+    days: {
+      dayOfWeek: number
+      slotsCount: number
+      hasAvailability: boolean
+    }[]
+  }
+  pendingRequests: TutorDashboardLesson[]
+  upcomingLessons: TutorDashboardLesson[]
+  recentConversations: {
+    id: string
+    counterpartyName: string
+    counterpartyAvatarUrl: string | null
+    lastMessage: string | null
+    unread: boolean
+    updatedAt: string
+  }[]
+}
+
+export type AdminTutorSummary = {
+  id: string
+  displayName: string
+  email: string
+  avatarUrl: string | null
+  headline: string | null
+  subjects: string[]
+  lessonFormats: ("online" | "offline")[]
+  defaultHourlyRateCents: number
+  applicationStatus: string
+  verificationStatus: string
+  submittedAt: string | null
+  reviewedAt: string | null
+  rejectionReason: string | null
+  documentSummary: {
+    total: number
+    pending: number
+    verified: number
+    rejected: number
+  }
+}
+
+export type AdminTutorDetail = AdminTutorSummary & {
+  userId: string
+  bio: string
+  experienceYears: number | null
+  education: string | null
+  country: string | null
+  city: string | null
+  timezone: string
+  isAcceptingStudents: boolean
+  tags: string[]
+  lessonsCompleted: number
+  rating: number
+  reviews: number
+  reviewedByUserId: string | null
+  verificationDocuments: Array<{
+    id: string
+    fileName: string
+    documentType: string
+    metadata: unknown
+    status: string
+    uploadedAt: string
+    sizeBytes: number
+    mimeType: string
+    rejectionReason: string | null
+  }>
+  availabilityRules: Array<{
+    id: string
+    dayOfWeek: number
+    startTime: string
+    endTime: string
+    ruleType: string
+  }>
+}
+
 export const api = {
   tutors: {
-    list: () => apiFetch<ApiTutor[]>("/tutors"),
+    list: (formats?: string) =>
+      apiFetch<ApiTutor[]>(
+        formats ? `/tutors?formats=${encodeURIComponent(formats)}` : "/tutors",
+      ),
     get: (id: string) => apiFetch<ApiTutor>(`/tutors/${id}`),
+    ownProfile: () => apiFetch<ApiTutor>("/tutors/profile/me"),
+    updateProfile: (payload: UpdateTutorProfilePayload) =>
+      apiFetch<ApiTutor>("/tutors/profile/me", {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      }),
+    submitApplication: () =>
+      apiFetch<ApiTutor>("/tutors/profile/me/submit", { method: "POST" }),
+    dashboardOverview: () =>
+      apiFetch<TutorDashboardOverview>("/tutors/dashboard/overview"),
     slots: (tutorProfileId: string) =>
       apiFetch<AvailabilitySlot[]>(
         `/availability/tutors/${tutorProfileId}/slots`,
@@ -281,6 +439,11 @@ export const api = {
   },
   chat: {
     conversations: () => apiFetch<ConversationSummary[]>("/chat/conversations"),
+    createConversation: (tutorProfileId: string) =>
+      apiFetch<{ id: string }>("/chat/conversations", {
+        method: "POST",
+        body: JSON.stringify({ tutorProfileId }),
+      }),
     messages: (conversationId: string, since?: string) => {
       const query = since ? `?since=${encodeURIComponent(since)}` : ""
       return apiFetch<ChatMessage[]>(
@@ -307,5 +470,30 @@ export const api = {
         method: "POST",
         body: JSON.stringify(payload),
       }),
+  },
+  admin: {
+    listTutors: (status: "SUBMITTED" | "APPROVED" | "REJECTED" | "ALL" = "SUBMITTED") =>
+      apiFetch<AdminTutorSummary[]>(`/admin/tutors?status=${status}`),
+    getTutor: (id: string) => apiFetch<AdminTutorDetail>(`/admin/tutors/${id}`),
+    approveTutor: (id: string) =>
+      apiFetch<AdminTutorDetail>(`/admin/tutors/${id}/approve`, { method: "POST" }),
+    rejectTutor: (id: string, reason: string) =>
+      apiFetch<AdminTutorDetail>(`/admin/tutors/${id}/reject`, {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      }),
+    reviewDocument: (
+      id: string,
+      status: "VERIFIED" | "REJECTED",
+      rejectionReason?: string,
+    ) =>
+      apiFetch(`/admin/verification-documents/${id}/review`, {
+        method: "POST",
+        body: JSON.stringify({ status, rejectionReason }),
+      }),
+    documentDownload: (id: string) =>
+      apiFetch<{ downloadUrl: string; fileName: string; mimeType: string }>(
+        `/admin/verification-documents/${id}/download`,
+      ),
   },
 }

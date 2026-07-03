@@ -10,10 +10,15 @@ import {
   WizardStepHeader,
   type WizardStepItem,
 } from "@/app/components/auth-wizard-layout"
+import {
+  GoogleAuthDivider,
+  GoogleSignInButton,
+} from "@/app/components/auth/google-sign-in-button"
 import { ArrowRight, GraduationCap, Lock, Mail, UserRound } from "lucide-react"
 import { useTranslations } from "@/lib/i18n/locale-context"
 import { getApiUrl } from "@/lib/api"
 import { getDefaultRouteForUser, saveAuthSession, AUTH_FETCH_INIT } from "@/lib/auth-client"
+import { readReturnToParam } from "@/lib/guest-auth"
 import { useToast } from "@/lib/toast-context"
 
 type LoginRole = "student" | "tutor"
@@ -24,6 +29,7 @@ export default function LoginPage() {
   const [role, setRole] = useState<LoginRole>("student")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [showEmailForm, setShowEmailForm] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -86,7 +92,7 @@ export default function LoginPage() {
         if (data.access_token && data.user) {
           saveAuthSession(data.access_token, data.user)
         }
-        router.push(getDefaultRouteForUser(data.user))
+        router.push(readReturnToParam() ?? getDefaultRouteForUser(data.user))
       } catch {
         toast.error(t("toast.networkError"))
       }
@@ -103,26 +109,43 @@ export default function LoginPage() {
         <>
           {t("auth.noAccount")}{" "}
           <Link
-            href="/register"
-            className="font-black text-[#8B5CF6] hover:underline"
+            href="/signup"
+            className="font-black text-[var(--primary-from)] hover:underline"
           >
             {t("auth.createOne")}
           </Link>
         </>
       }
     >
-      <form onSubmit={handleSubmit}>
+      <div className="space-y-5">
         <WizardStepHeader
           eyebrow={t("auth.wizard.badge")}
           title={t("auth.welcomeBack")}
-          subtitle={t("auth.signInSubtitle")}
+          subtitle="Continue with Google or use your email."
         />
 
-        <div className="space-y-4">
+        <GoogleSignInButton
+          onError={(message) => toast.error(message)}
+          redirectAfterSuccess
+        />
+
+        <GoogleAuthDivider />
+
+        {!showEmailForm ? (
+          <button
+            type="button"
+            onClick={() => setShowEmailForm(true)}
+            className="inline-flex min-h-11 w-full items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-[var(--text-primary)] hover:bg-slate-50 dark:border-[var(--border)] dark:bg-[var(--surface)]"
+          >
+            Continue with email
+          </button>
+        ) : (
+          <form onSubmit={handleSubmit}>
+            <div className="space-y-4">
           <label className="block">
             <WizardFieldLabel>{t("auth.email")}</WizardFieldLabel>
             <div className="relative">
-              <Mail className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-300 dark:text-zinc-600" />
+              <Mail className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-300 dark:text-[var(--text-muted)]" />
               <WizardInput
                 type="email"
                 autoComplete="email"
@@ -138,7 +161,7 @@ export default function LoginPage() {
           <label className="block">
             <WizardFieldLabel>{t("auth.password")}</WizardFieldLabel>
             <div className="relative">
-              <Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-300 dark:text-zinc-600" />
+              <Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-300 dark:text-[var(--text-muted)]" />
               <WizardInput
                 type="password"
                 autoComplete="current-password"
@@ -153,22 +176,22 @@ export default function LoginPage() {
         </div>
 
         <div className="mt-4 flex items-center justify-between gap-3 text-sm">
-          <label className="flex cursor-pointer items-center gap-2 font-bold text-slate-600 dark:text-zinc-400">
+          <label className="flex cursor-pointer items-center gap-2 font-bold text-slate-600 dark:text-[var(--text-muted)]">
             <input
               type="checkbox"
-              className="h-4 w-4 rounded border-slate-300 text-[#8B5CF6] focus:ring-[#8B5CF6] dark:border-zinc-600"
+              className="h-4 w-4 rounded border-slate-300 text-[var(--primary-from)] focus:ring-[var(--primary-from)] dark:border-zinc-600"
             />
             {t("auth.rememberMe")}
           </label>
           <button
             type="button"
-            className="font-bold text-[#8B5CF6] hover:underline"
+            className="font-bold text-[var(--primary-from)] hover:underline"
           >
             {t("auth.forgotPassword")}
           </button>
         </div>
 
-        <p className="mt-5 text-xs font-semibold text-slate-400 dark:text-zinc-500">
+        <p className="mt-5 text-xs font-semibold text-[var(--text-muted)]">
           {role === "student" ? t("auth.loginAsStudent") : t("auth.loginAsTutor")}
         </p>
 
@@ -188,7 +211,7 @@ export default function LoginPage() {
                 ? t("auth.loginAsTutor")
                 : t("auth.loginAsStudent")
             }
-            className="inline-flex shrink-0 items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-xs font-black uppercase tracking-wider text-slate-600 transition hover:border-violet-200 hover:bg-violet-50 hover:text-[#8B5CF6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-violet-800 dark:hover:bg-violet-950/40 dark:hover:text-violet-300"
+            className="inline-flex shrink-0 items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-xs font-black uppercase tracking-wider text-slate-600 transition hover:border-violet-200 hover:bg-violet-50 hover:text-[var(--primary-from)] dark:border-[var(--border)] dark:bg-[var(--surface)] dark:text-zinc-300 dark:hover:border-violet-800 dark:hover:bg-violet-950/40 dark:hover:text-violet-300"
           >
             {role === "student" ? (
               <>
@@ -204,13 +227,19 @@ export default function LoginPage() {
           </button>
           <button
             type="submit"
-            className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#8B5CF6] to-[#6366F1] px-6 py-3.5 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-violet-300/30 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-violet-400/30 dark:shadow-violet-950/40"
+            className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[var(--primary-from)] to-[var(--primary-to)] px-6 py-3.5 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-violet-300/30 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-violet-400/30 dark:shadow-violet-950/40"
           >
             {t("auth.signIn")}
             <ArrowRight className="h-5 w-5" />
           </button>
         </div>
-      </form>
+          </form>
+        )}
+
+        <p className="text-xs text-[var(--text-muted)]">
+          We only use your Google account to create and secure your Tutora account.
+        </p>
+      </div>
     </AuthWizardLayout>
   )
 }

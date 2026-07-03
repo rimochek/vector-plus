@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Loader2, Send } from "lucide-react"
+import { ArrowLeft, Loader2, Search, Send } from "lucide-react"
 import { useTranslations } from "@/lib/i18n/locale-context"
 import {
   api,
@@ -14,8 +14,7 @@ import { getStoredUser } from "@/lib/auth-client"
 import { CancelLessonModal } from "@/app/components/cancel-lesson-modal"
 import { LessonChatCard } from "@/app/components/lesson-chat-card"
 import { useToast } from "@/lib/toast-context"
-
-const POLL_INTERVAL_MS = 4000
+import { LIVE_FEED_POLL_INTERVAL_MS } from "@/lib/use-live-dashboard-feed"
 
 type TimelineItem =
   | { kind: "message"; id: string; createdAt: string; message: ChatMessage }
@@ -23,9 +22,10 @@ type TimelineItem =
 
 type ChatInboxProps = {
   onConversationChange?: (id: string | null) => void
+  onActivity?: () => void
 }
 
-export function ChatInbox({ onConversationChange }: ChatInboxProps) {
+export function ChatInbox({ onConversationChange, onActivity }: ChatInboxProps) {
   const { t, locale } = useTranslations()
   const toast = useToast()
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
@@ -39,6 +39,7 @@ export function ChatInbox({ onConversationChange }: ChatInboxProps) {
   const [cancelLessonId, setCancelLessonId] = useState<string | null>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const lastPollRef = useRef<string | null>(null)
+  const stickToBottomRef = useRef(true)
   const userId = getStoredUser()?.id ?? ""
   const isTutor = (getStoredUser()?.role ?? getStoredUser()?.roles?.[0]) === "tutor"
 
@@ -68,6 +69,14 @@ export function ChatInbox({ onConversationChange }: ChatInboxProps) {
     container.scrollTo({ top: container.scrollHeight, behavior })
   }, [])
 
+  const updateStickToBottom = useCallback(() => {
+    const container = messagesContainerRef.current
+    if (!container) return
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight
+    stickToBottomRef.current = distanceFromBottom <= 80
+  }, [])
+
   const loadConversations = useCallback(async () => {
     try {
       const data = await api.chat.conversations()
@@ -90,6 +99,10 @@ export function ChatInbox({ onConversationChange }: ChatInboxProps) {
 
   useEffect(() => {
     loadConversations()
+    const interval = setInterval(() => {
+      void loadConversations()
+    }, LIVE_FEED_POLL_INTERVAL_MS)
+    return () => clearInterval(interval)
   }, [loadConversations])
 
   useEffect(() => {
@@ -108,6 +121,7 @@ export function ChatInbox({ onConversationChange }: ChatInboxProps) {
         if (since) {
           if (data.length > 0) {
             setMessages((prev) => [...prev, ...data])
+            onActivity?.()
           }
         } else {
           setMessages(data)
@@ -121,6 +135,7 @@ export function ChatInbox({ onConversationChange }: ChatInboxProps) {
     }
 
     lastPollRef.current = null
+    stickToBottomRef.current = true
     setMessages([])
     setLessons([])
     loadMessages()
@@ -131,23 +146,24 @@ export function ChatInbox({ onConversationChange }: ChatInboxProps) {
         loadMessages(lastPollRef.current)
       }
       loadLessons(activeId)
-    }, POLL_INTERVAL_MS)
+    }, LIVE_FEED_POLL_INTERVAL_MS)
 
     return () => {
       cancelled = true
       clearInterval(interval)
     }
-  }, [activeId, t, loadLessons])
+  }, [activeId, t, loadLessons, onActivity])
 
   useEffect(() => {
-    if (timeline.length === 0) return
+    if (timeline.length === 0 || !stickToBottomRef.current) return
     requestAnimationFrame(() => {
-      scrollMessagesToBottom()
+      scrollMessagesToBottom(timeline.length <= 1 ? "auto" : "smooth")
     })
   }, [timeline, scrollMessagesToBottom])
 
   const handleSend = async () => {
     if (!activeId || !draft.trim()) return
+    stickToBottomRef.current = true
     setSending(true)
     try {
       const msg = await api.chat.send(activeId, draft.trim())
@@ -155,6 +171,7 @@ export function ChatInbox({ onConversationChange }: ChatInboxProps) {
       lastPollRef.current = msg.createdAt
       setDraft("")
       loadConversations()
+      onActivity?.()
     } catch {
       setError(t("chat.sendError"))
     } finally {
@@ -202,7 +219,7 @@ export function ChatInbox({ onConversationChange }: ChatInboxProps) {
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-[#8B5CF6]" />
+        <Loader2 className="h-8 w-8 animate-spin text-[var(--primary-from)]" />
       </div>
     )
   }
@@ -216,9 +233,19 @@ export function ChatInbox({ onConversationChange }: ChatInboxProps) {
         variant={isTutor ? "tutor" : "student"}
       />
 
-      <div className="flex h-[min(560px,calc(100dvh-14rem))] flex-col gap-0 overflow-hidden rounded-[2rem] border border-slate-100 dark:border-zinc-800 lg:flex-row">
-        <aside className="w-full shrink-0 border-b border-slate-100 dark:border-zinc-800 lg:w-72 lg:border-b-0 lg:border-r">
-          <div className="max-h-48 overflow-y-auto overscroll-contain lg:max-h-none lg:h-full">
+      <div className="flex h-[min(680px,calc(100dvh-12rem))] flex-col overflow-hidden rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-sm)] lg:flex-row">
+        <aside className={`w-full shrink-0 border-b border-[var(--border)] lg:w-80 lg:border-b-0 lg:border-r ${activeId ? "hidden lg:block" : "block"}`}>
+          <div className="border-b border-[var(--border)] p-4">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+              <input
+                type="search"
+                placeholder={t("chat.searchPlaceholder")}
+                className="w-full rounded-[var(--radius-input)] border border-[var(--border)] bg-[var(--surface-secondary)] py-2.5 pl-9 pr-3 text-sm outline-none focus:border-[var(--primary)]"
+              />
+            </div>
+          </div>
+          <div className="max-h-[420px] overflow-y-auto overscroll-contain lg:h-full lg:max-h-none">
             {conversations.length === 0 ? (
               <p className="p-6 text-sm font-semibold text-slate-400">
                 {t("dash.chats.empty")}
@@ -229,25 +256,25 @@ export function ChatInbox({ onConversationChange }: ChatInboxProps) {
                   key={conv.id}
                   type="button"
                   onClick={() => setActiveId(conv.id)}
-                  className={`flex w-full items-center gap-3 border-b border-slate-50 p-4 text-left transition hover:bg-violet-50/50 dark:border-zinc-900 dark:hover:bg-violet-950/20 ${
-                    activeId === conv.id ? "bg-violet-50 dark:bg-violet-950/30" : ""
+                  className={`flex w-full items-center gap-3 border-b border-[var(--border)] p-4 text-left transition duration-150 hover:bg-[var(--primary-soft)] ${
+                    activeId === conv.id ? "bg-[var(--primary-soft)]" : ""
                   }`}
                 >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#8B5CF6] text-sm font-black text-white">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--primary-from)] text-sm font-black text-white">
                     {conv.counterpartyName.charAt(0)}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-black text-[#1E293B] dark:text-zinc-100">
+                    <p className="truncate font-black text-[var(--text-primary)] dark:text-[var(--text-primary)]">
                       {conv.counterpartyName}
                     </p>
                     {conv.lastMessage && (
-                      <p className="truncate text-xs font-semibold text-slate-400">
+                      <p className="truncate text-xs font-medium text-[var(--text-muted)]">
                         {conv.lastMessage.content}
                       </p>
                     )}
                   </div>
                   {conv.unread && (
-                    <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#8B5CF6]" />
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[var(--primary-from)]" />
                   )}
                 </button>
               ))
@@ -255,25 +282,34 @@ export function ChatInbox({ onConversationChange }: ChatInboxProps) {
           </div>
         </aside>
 
-        <div className="flex min-h-0 flex-1 flex-col">
+        <div className={`min-h-0 flex-1 flex-col ${activeId ? "flex" : "hidden lg:flex"}`}>
           {!activeId ? (
-            <div className="flex flex-1 items-center justify-center p-8 text-sm font-semibold text-slate-400">
+            <div className="flex flex-1 items-center justify-center p-8 text-sm font-semibold text-[var(--text-muted)]">
               {t("chat.selectConversation")}
             </div>
           ) : (
             <>
-              <div className="shrink-0 border-b border-slate-100 px-6 py-4 dark:border-zinc-800">
-                <p className="font-black text-[#1E293B] dark:text-zinc-100">
+              <div className="flex shrink-0 items-center gap-3 border-b border-[var(--border)] px-4 py-4 sm:px-6">
+                <button
+                  type="button"
+                  onClick={() => setActiveId(null)}
+                  className="rounded-full p-2 text-[var(--text-muted)] hover:bg-[var(--chip)] lg:hidden"
+                  aria-label={t("nav.back")}
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+                <p className="font-black text-[var(--text-primary)] dark:text-[var(--text-primary)]">
                   {activeConversation?.counterpartyName}
                 </p>
               </div>
 
               <div
                 ref={messagesContainerRef}
+                onScroll={updateStickToBottom}
                 className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-6"
               >
                 {timeline.length === 0 ? (
-                  <p className="text-center text-sm font-semibold text-slate-400">
+                  <p className="text-center text-sm font-semibold text-[var(--text-muted)]">
                     {t("chat.emptyThread")}
                   </p>
                 ) : (
@@ -314,8 +350,8 @@ export function ChatInbox({ onConversationChange }: ChatInboxProps) {
                         <div
                           className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm font-medium ${
                             mine
-                              ? "bg-[#8B5CF6] text-white"
-                              : "bg-slate-100 text-[#1E293B] dark:bg-zinc-800 dark:text-zinc-100"
+                              ? "bg-[var(--primary-from)] text-white"
+                              : "bg-[var(--surface-secondary)] text-[var(--text-primary)]"
                           }`}
                         >
                           {item.message.content}
@@ -330,7 +366,7 @@ export function ChatInbox({ onConversationChange }: ChatInboxProps) {
                 <p className="shrink-0 px-6 text-sm font-semibold text-red-500">{error}</p>
               )}
 
-              <div className="flex shrink-0 gap-2 border-t border-slate-100 p-4 dark:border-zinc-800">
+              <div className="flex shrink-0 gap-2 border-t border-[var(--border)] p-4">
                 <input
                   type="text"
                   value={draft}
@@ -342,13 +378,13 @@ export function ChatInbox({ onConversationChange }: ChatInboxProps) {
                     }
                   }}
                   placeholder={t("chat.placeholder")}
-                  className="flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium outline-none focus:border-[#8B5CF6] dark:border-zinc-700 dark:bg-zinc-900"
+                  className="min-w-0 flex-1 rounded-[var(--radius-input)] border border-[var(--border)] bg-[var(--surface-secondary)] px-4 py-3 text-sm font-medium outline-none focus:border-[var(--primary)]"
                 />
                 <button
                   type="button"
                   disabled={sending || !draft.trim()}
                   onClick={handleSend}
-                  className="rounded-2xl bg-[#8B5CF6] p-3 text-white disabled:opacity-50"
+                  className="rounded-[var(--radius-button)] bg-[var(--primary)] p-3 text-[var(--primary-foreground)] transition duration-150 hover:bg-[var(--primary-hover)] disabled:opacity-50"
                 >
                   <Send className="h-5 w-5" />
                 </button>

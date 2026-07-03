@@ -67,17 +67,17 @@ export function CancelLessonModal({
         aria-label={t("booking.close")}
         onClick={onClose}
       />
-      <div className="relative z-10 w-full max-w-md rounded-[2rem] border border-slate-100 bg-white p-8 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="relative z-10 w-full max-w-md rounded-[2rem] border border-slate-100 bg-white p-8 shadow-2xl dark:border-[var(--border)] dark:bg-[var(--bg)]">
         <div className="mb-6 flex items-start justify-between gap-4">
-          <h3 className="text-xl font-black text-[#1E293B] dark:text-zinc-100">
+          <h3 className="text-xl font-black text-[var(--text-primary)] dark:text-[var(--text-primary)]">
             {t("cancel.title")}
           </h3>
-          <button type="button" onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-zinc-800">
+          <button type="button" onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-[var(--chip)]">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <p className="mb-4 text-sm font-semibold text-slate-500 dark:text-zinc-400">
+        <p className="mb-4 text-sm font-semibold text-slate-500 dark:text-[var(--text-muted)]">
           {t(variant === "tutor" ? "cancel.subtitleTutor" : "cancel.subtitle")}
         </p>
 
@@ -87,8 +87,8 @@ export function CancelLessonModal({
               key={item.id}
               className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 transition ${
                 reason === item.id
-                  ? "border-[#8B5CF6] bg-violet-50 dark:bg-violet-950/30"
-                  : "border-slate-200 dark:border-zinc-700"
+                  ? "border-[var(--primary-from)] bg-violet-50 dark:bg-violet-950/30"
+                  : "border-slate-200 dark:border-[var(--border)]"
               }`}
             >
               <input
@@ -96,9 +96,9 @@ export function CancelLessonModal({
                 name="cancel-reason"
                 checked={reason === item.id}
                 onChange={() => setReason(item.id)}
-                className="accent-[#8B5CF6]"
+                className="accent-[var(--primary-from)]"
               />
-              <span className="text-sm font-semibold text-[#1E293B] dark:text-zinc-100">
+              <span className="text-sm font-semibold text-[var(--text-primary)] dark:text-[var(--text-primary)]">
                 {t(item.labelKey)}
               </span>
             </label>
@@ -111,7 +111,7 @@ export function CancelLessonModal({
             onChange={(e) => setOtherText(e.target.value)}
             rows={3}
             placeholder={t("cancel.otherPlaceholder")}
-            className="mt-4 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium outline-none focus:border-[#8B5CF6] dark:border-zinc-700 dark:bg-zinc-900"
+            className="mt-4 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium outline-none focus:border-[var(--primary-from)] dark:border-[var(--border)] dark:bg-[var(--surface)]"
           />
         )}
 
@@ -119,7 +119,7 @@ export function CancelLessonModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-black uppercase tracking-widest text-slate-500 dark:border-zinc-700"
+            className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-black uppercase tracking-widest text-slate-500 dark:border-[var(--border)]"
           >
             {t("booking.close")}
           </button>

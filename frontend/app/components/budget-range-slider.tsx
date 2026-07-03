@@ -41,32 +41,32 @@ export function BudgetRangeSlider({
   if (compact) {
     return (
       <div className="space-y-3">
-        <div className="flex items-stretch gap-2 rounded-xl border border-slate-200 bg-slate-50/80 p-3 dark:border-zinc-700 dark:bg-zinc-900/80">
+        <div className="flex items-stretch gap-2 rounded-[var(--radius-input)] border border-[var(--border-strong)] bg-[var(--chip)] p-3">
           <div className="min-w-0 flex-1">
-            <span className="mb-0.5 block text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+            <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
               {minLabel}
             </span>
-            <p className="truncate text-sm font-black tabular-nums text-[#8B5CF6]">
+            <p className="truncate text-sm font-bold tabular-nums text-[var(--primary-to)]">
               {formatValue(valueMin)}
             </p>
           </div>
-          <div className="flex w-4 shrink-0 items-center justify-center text-slate-300 dark:text-zinc-600">
+          <div className="flex w-4 shrink-0 items-center justify-center text-[var(--text-muted)]">
             —
           </div>
           <div className="min-w-0 flex-1 text-right">
-            <span className="mb-0.5 block text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+            <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
               {maxLabel}
             </span>
-            <p className="truncate text-sm font-black tabular-nums text-[#8B5CF6]">
+            <p className="truncate text-sm font-bold tabular-nums text-[var(--primary-to)]">
               {formatValue(valueMax)}
             </p>
           </div>
         </div>
 
         <div className="budget-range-slider relative flex h-9 items-center px-0.5">
-          <div className="absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-slate-200/80 dark:bg-zinc-800" />
+          <div className="absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-[var(--chip)]" />
           <div
-            className="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#6366F1]"
+            className="absolute top-1/2 h-2 -translate-y-1/2 rounded-full tutora-gradient"
             style={{
               left: `${pctMin}%`,
               width: `${Math.max(pctMax - pctMin, 0)}%`,
@@ -96,7 +96,7 @@ export function BudgetRangeSlider({
           />
         </div>
 
-        <div className="flex justify-between gap-2 text-[9px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+        <div className="flex justify-between gap-2 text-[9px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
           <span className="truncate">{formatValue(min)}</span>
           <span className="truncate">{formatValue(max)}</span>
         </div>
@@ -105,30 +105,30 @@ export function BudgetRangeSlider({
   }
 
   return (
-    <div className="rounded-[1.75rem] border border-violet-100 bg-gradient-to-br from-violet-50/80 via-white to-indigo-50/60 p-5 dark:border-violet-900/40 dark:from-violet-950/20 dark:via-zinc-900 dark:to-indigo-950/10 sm:p-6">
+    <div className="tutora-card p-5 sm:p-6">
       <div className="mb-5 grid gap-3 sm:grid-cols-2">
-        <div className="min-w-0 rounded-2xl border border-white/80 bg-white/90 p-3 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/90 sm:p-4">
-          <span className="mb-1 block text-[10px] font-black uppercase tracking-[0.16em] text-slate-400 dark:text-zinc-500">
+        <div className="min-w-0 rounded-[var(--radius-button)] border border-[var(--border-strong)] bg-[var(--chip)] p-3 sm:p-4">
+          <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--text-muted)]">
             {minLabel}
           </span>
-          <span className="block truncate text-lg font-black tabular-nums text-[#8B5CF6] sm:text-xl">
+          <span className="block truncate text-lg font-bold tabular-nums text-[var(--primary-to)] sm:text-xl">
             {formatValue(valueMin)}
           </span>
         </div>
-        <div className="min-w-0 rounded-2xl border border-white/80 bg-white/90 p-3 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/90 sm:p-4 sm:text-right">
-          <span className="mb-1 block text-[10px] font-black uppercase tracking-[0.16em] text-slate-400 dark:text-zinc-500">
+        <div className="min-w-0 rounded-[var(--radius-button)] border border-[var(--border-strong)] bg-[var(--chip)] p-3 sm:p-4 sm:text-right">
+          <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--text-muted)]">
             {maxLabel}
           </span>
-          <span className="block truncate text-lg font-black tabular-nums text-[#8B5CF6] sm:text-xl">
+          <span className="block truncate text-lg font-bold tabular-nums text-[var(--primary-to)] sm:text-xl">
             {formatValue(valueMax)}
           </span>
         </div>
       </div>
 
       <div className="budget-range-slider relative flex h-11 items-center px-1 sm:h-12">
-        <div className="absolute inset-x-0 top-1/2 h-2.5 -translate-y-1/2 rounded-full bg-slate-200/80 dark:bg-zinc-800 sm:h-3" />
+        <div className="absolute inset-x-0 top-1/2 h-2.5 -translate-y-1/2 rounded-full bg-[var(--chip)] sm:h-3" />
         <div
-          className="absolute top-1/2 h-2.5 -translate-y-1/2 rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#6366F1] sm:h-3"
+          className="absolute top-1/2 h-2.5 -translate-y-1/2 rounded-full tutora-gradient sm:h-3"
           style={{
             left: `${pctMin}%`,
             width: `${Math.max(pctMax - pctMin, 0)}%`,
@@ -158,7 +158,7 @@ export function BudgetRangeSlider({
         />
       </div>
 
-      <div className="mt-3 flex justify-between gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-zinc-500">
+      <div className="mt-3 flex justify-between gap-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
         <span className="truncate">{formatValue(min)}</span>
         <span className="truncate">{formatValue(max)}</span>
       </div>

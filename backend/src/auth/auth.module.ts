@@ -3,11 +3,14 @@ import { JwtModule, JwtModuleOptions } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
+import { GoogleAuthService } from './google-auth.service';
 import { PrismaModule } from '../prisma/prisma.module';
+import { AdminRoleModule } from '../admin/admin-role.module';
 
 @Module({
   imports: [
     PrismaModule,
+    AdminRoleModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService): JwtModuleOptions => ({
@@ -20,7 +23,7 @@ import { PrismaModule } from '../prisma/prisma.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService],
-  exports: [AuthService, JwtModule],
+  providers: [AuthService, GoogleAuthService],
+  exports: [AuthService, GoogleAuthService, JwtModule],
 })
 export class AuthModule {}

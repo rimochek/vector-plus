@@ -149,7 +149,7 @@ export function handleSessionExpired(): void {
   clearLocalSession()
 
   const path = window.location.pathname
-  if (path !== "/login" && path !== "/register") {
+  if (path !== "/login" && path !== "/register" && !path.startsWith("/signup")) {
     window.location.replace("/login?session=expired")
   } else {
     handlingSessionExpiry = false

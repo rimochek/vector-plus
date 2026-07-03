@@ -1,59 +1,97 @@
 "use client"
 
-import { useEffect, useState, type ComponentType } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import {
-  ArrowLeft,
+  Award,
   BookOpen,
   CheckCircle,
+  Globe,
   GraduationCap,
-  Heart,
   Loader2,
+  Monitor,
   MapPin,
   Sparkles,
   Star,
   Users,
 } from "lucide-react"
 import { useTranslations } from "@/lib/i18n/locale-context"
+import type { MessageId } from "@/lib/i18n/messages"
 import { api, type ApiTutor } from "@/lib/api-client"
 import { isLoggedIn, getStoredUser } from "@/lib/auth-client"
-import { formatTenge, tutorHourlyRateTenge } from "@/lib/currency"
-import { BookingModal } from "@/app/components/booking-modal"
+import { studentSignupPath } from "@/lib/guest-auth"
+import { TutorBookingSidebar } from "@/app/components/tutor-booking-sidebar"
+import { Container } from "@/app/components/ui/container"
+import { Badge } from "@/app/components/ui/badge"
+import { LEARNING_TOPIC_IDS, LEGACY_TOPIC_IDS, topicLabelId } from "@/app/components/tutors-data"
+import {
+  choiceFromLessonFormats,
+  normalizeLessonFormats,
+  type TutorLessonFormat,
+} from "@/lib/tutor-lesson-formats"
 
-function ProfileBackButton({ onClick }: { onClick: () => void }) {
-  const { t } = useTranslations()
+type ProfileTab = "about" | "subjects" | "reviews" | "availability" | "education"
 
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="group mb-8 inline-flex items-center gap-2 rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm backdrop-blur-sm transition hover:border-violet-200 hover:bg-violet-50 hover:text-[#8B5CF6] dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-300 dark:hover:border-violet-900/50 dark:hover:bg-violet-950/30 dark:hover:text-violet-300"
-    >
-      <ArrowLeft className="h-4 w-4 transition group-hover:-translate-x-0.5" />
-      {t("tutorProfile.back")}
-    </button>
-  )
+function tagLabelId(id: string): MessageId | null {
+  if (
+    LEARNING_TOPIC_IDS.includes(id as (typeof LEARNING_TOPIC_IDS)[number]) ||
+    LEGACY_TOPIC_IDS.includes(id as (typeof LEGACY_TOPIC_IDS)[number])
+  ) {
+    return topicLabelId(id)
+  }
+  return null
 }
 
-function StatCard({
+function lessonFormatLabel(
+  formats: TutorLessonFormat[],
+  t: (id: MessageId) => string,
+): string {
+  const choice = choiceFromLessonFormats(formats)
+  if (choice === "both") return t("find.format.hybrid")
+  if (choice === "offline") return t("find.format.inPerson")
+  return t("find.format.online")
+}
+
+function splitBio(bio: string) {
+  const quoteMatch = bio.match(/"([^"]+)"/)
+  if (quoteMatch) {
+    const body = bio.replace(quoteMatch[0], "").replace(/\s+/g, " ").trim()
+    return {
+      body: body.length > 0 ? body : bio.trim(),
+      highlight: quoteMatch[1].trim(),
+    }
+  }
+
+  return { body: bio.trim(), highlight: null as string | null }
+}
+
+function reviewDistribution(rating: number, total: number) {
+  if (total <= 0) return [0, 0, 0, 0, 0]
+  const weights = [5, 4, 3, 2, 1].map((stars) => {
+    const distance = Math.abs(stars - rating)
+    return Math.max(0.05, 1.4 - distance * 0.45)
+  })
+  const sum = weights.reduce((acc, value) => acc + value, 0)
+  return weights.map((weight) => Math.round((weight / sum) * total))
+}
+
+function MetricCard({
   icon: Icon,
-  label,
   value,
+  label,
 }: {
-  icon: ComponentType<{ className?: string }>
-  label: string
+  icon: typeof Star
   value: string
+  label: string
 }) {
   return (
-    <div className="rounded-[1.75rem] border border-slate-100 bg-white/90 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/90">
-      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-[#8B5CF6] dark:bg-violet-950/40">
-        <Icon className="h-5 w-5" />
+    <div className="flex min-h-[7rem] flex-col items-center rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-3 text-center shadow-[var(--shadow-sm)] sm:min-h-[8.75rem] sm:p-4">
+      <div className="mb-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--primary-soft)] text-[var(--primary)] sm:mb-3 sm:h-10 sm:w-10">
+        <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
       </div>
-      <p className="text-2xl font-black text-[#1E293B] dark:text-zinc-100">
-        {value}
-      </p>
-      <p className="mt-1 text-xs font-bold uppercase tracking-widest text-slate-400 dark:text-zinc-500">
+      <p className="text-xl font-extrabold leading-none text-[var(--text-primary)] sm:text-2xl">{value}</p>
+      <p className="mt-2 line-clamp-2 min-h-[2rem] text-xs font-medium leading-snug text-[var(--text-muted)]">
         {label}
       </p>
     </div>
@@ -69,19 +107,11 @@ export function TutorProfile() {
   const [loading, setLoading] = useState(true)
   const [favorited, setFavorited] = useState(false)
   const [favoriteLoading, setFavoriteLoading] = useState(false)
-  const [bookingOpen, setBookingOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<ProfileTab>("about")
 
   const user = getStoredUser()
   const isStudent = (user?.role ?? user?.roles?.[0]) === "student"
-
-  const goBack = () => {
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back()
-      return
-    }
-    router.push("/tutors")
-  }
 
   useEffect(() => {
     api.tutors
@@ -101,7 +131,7 @@ export function TutorProfile() {
 
   const toggleFavorite = async () => {
     if (!isLoggedIn()) {
-      router.push("/login")
+      router.push(studentSignupPath(`/tutors/${tutorId}`))
       return
     }
     if (!isStudent) return
@@ -119,239 +149,408 @@ export function TutorProfile() {
     }
   }
 
-  const handleBook = () => {
-    if (!isLoggedIn()) {
-      router.push("/login")
-      return
-    }
-    if (!isStudent) return
-    setBookingOpen(true)
-  }
+  const tabs = useMemo(
+    () =>
+      [
+        { id: "about" as const, label: t("tutorProfile.tab.about") },
+        { id: "subjects" as const, label: t("tutorProfile.tab.subjects") },
+        {
+          id: "reviews" as const,
+          label: `${t("tutorProfile.tab.reviews")}${tutor ? ` (${tutor.reviews})` : ""}`,
+        },
+        { id: "availability" as const, label: t("tutorProfile.tab.availability") },
+        { id: "education" as const, label: t("tutorProfile.tab.education") },
+      ] satisfies { id: ProfileTab; label: string }[],
+    [t, tutor],
+  )
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
-        <ProfileBackButton onClick={goBack} />
-        <div className="flex justify-center py-24">
-          <Loader2 className="h-8 w-8 animate-spin text-[#8B5CF6]" />
-        </div>
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[var(--primary)]" />
       </div>
     )
   }
 
   if (error || !tutor) {
     return (
-      <div className="mx-auto max-w-lg px-4 py-12 sm:px-6">
-        <ProfileBackButton onClick={goBack} />
-        <div className="rounded-[2rem] border border-dashed border-slate-200 bg-white p-10 text-center dark:border-zinc-700 dark:bg-zinc-950">
-          <p className="font-semibold text-slate-500">
+      <Container size="content" className="py-12">
+        <div className="rounded-[var(--radius-panel)] border border-dashed border-[var(--border)] bg-[var(--surface)] p-10 text-center">
+          <p className="font-semibold text-[var(--text-muted)]">
             {error ?? t("tutorProfile.notFound")}
           </p>
           <Link
             href="/tutors"
-            className="mt-6 inline-flex rounded-2xl bg-[#8B5CF6] px-6 py-3 text-sm font-black uppercase tracking-widest text-white"
+            className="mt-6 inline-flex rounded-[var(--radius-button)] bg-[var(--primary)] px-6 py-3 text-sm font-semibold text-white"
           >
             {t("favorites.browse")}
           </Link>
         </div>
-      </div>
+      </Container>
     )
   }
 
   const location = [tutor.city, tutor.country].filter(Boolean).join(", ")
-  const hourlyRate = formatTenge(
-    tutorHourlyRateTenge(tutor.defaultHourlyRateCents),
-  )
+  const subjectTags =
+    tutor.tags && tutor.tags.length > 0
+      ? tutor.tags
+      : tutor.subjects?.map((subject) => subject.name) ?? [tutor.subject]
+  const { body: bioBody, highlight } = splitBio(tutor.bio)
+  const satisfaction = tutor.rating > 0 ? Math.round((tutor.rating / 5) * 100) : null
+  const distribution = reviewDistribution(tutor.rating, tutor.reviews)
+  const firstName = tutor.displayName.split(" ")[0] ?? tutor.displayName
+  const lessonFormats = normalizeLessonFormats(tutor.lessonFormats)
+  const formatLabel = lessonFormatLabel(lessonFormats, t)
+  const FormatIcon =
+    choiceFromLessonFormats(lessonFormats) === "offline" ? MapPin : Monitor
 
   return (
-    <>
-      <div className="relative overflow-hidden pb-20 pt-8">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-gradient-to-b from-violet-100/80 via-violet-50/40 to-transparent dark:from-violet-950/30 dark:via-violet-950/10" />
-        <div className="pointer-events-none absolute -right-20 top-10 h-56 w-56 rounded-full bg-violet-300/20 blur-3xl dark:bg-violet-700/10" />
-        <div className="pointer-events-none absolute -left-16 top-24 h-48 w-48 rounded-full bg-indigo-300/20 blur-3xl dark:bg-indigo-800/10" />
+    <div className="overflow-x-clip bg-[var(--background)] pb-10 pt-4 sm:pb-16 sm:pt-6">
+      <Container size="content" className="min-w-0">
+        <div className="grid min-w-0 w-full gap-6 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start xl:gap-8">
+          <TutorBookingSidebar
+            className="order-1 min-w-0 w-full xl:order-2"
+            tutor={tutor}
+            favorited={favorited}
+            favoriteLoading={favoriteLoading}
+            onToggleFavorite={toggleFavorite}
+          />
 
-        <div className="relative mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-          <ProfileBackButton onClick={goBack} />
+          <div className="order-2 min-w-0 w-full space-y-4 sm:space-y-6 xl:order-1">
+            <section className="relative overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-sm)] sm:p-6 lg:p-8">
+              <div className="pointer-events-none absolute -right-10 -top-10 hidden h-56 w-56 rounded-full bg-[var(--primary-soft)] blur-3xl sm:block" />
+              <div className="pointer-events-none absolute right-24 top-8 hidden h-32 w-32 rounded-full bg-violet-200/40 blur-2xl dark:bg-violet-900/20 sm:block" />
 
-          <div className="overflow-hidden rounded-[2.5rem] border border-slate-100/80 bg-white/90 shadow-[0_24px_80px_rgba(139,92,246,0.12)] backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/90 dark:shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
-            <div className="h-32 bg-gradient-to-r from-[#8B5CF6] via-[#7C6CF6] to-[#6366F1] sm:h-40" />
-
-            <div className="relative px-6 pb-8 sm:px-10">
-              <div className="-mt-16 flex flex-col gap-6 sm:-mt-20 sm:flex-row sm:items-end sm:justify-between">
-                <div className="flex items-end gap-5">
-                  <div className="flex h-28 w-28 shrink-0 items-center justify-center rounded-[2rem] border-4 border-white bg-gradient-to-br from-[#8B5CF6] to-[#6366F1] text-4xl font-black text-white shadow-xl shadow-violet-300/40 dark:border-zinc-950 dark:shadow-violet-950/40 sm:h-32 sm:w-32 sm:text-5xl">
-                    {tutor.displayName.charAt(0)}
+              <div className="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-6">
+                <div className="relative mx-auto shrink-0 pb-3 sm:mx-0">
+                  <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-4 border-[var(--surface)] bg-gradient-to-br from-[var(--primary)] to-[var(--primary-to)] text-3xl font-bold text-white shadow-[var(--shadow-md)] sm:h-28 sm:w-28 sm:text-4xl lg:h-32 lg:w-32">
+                    {tutor.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={tutor.avatarUrl}
+                        alt={tutor.displayName}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      tutor.displayName.charAt(0)
+                    )}
                   </div>
-                  <div className="min-w-0 pb-1">
-                    <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <h1 className="text-3xl font-black tracking-tight text-[#1E293B] dark:text-zinc-100 sm:text-4xl">
+                  <span className="absolute -bottom-1 left-1/2 max-w-[min(100%,12rem)] -translate-x-1/2 truncate rounded-full border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[10px] font-semibold text-[var(--success)] shadow-sm">
+                    <span className="inline-flex max-w-full items-center gap-1">
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--success)]" />
+                      <span className="truncate">{formatLabel}</span>
+                    </span>
+                  </span>
+                </div>
+
+                <div className="min-w-0 flex-1 space-y-4">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h1 className="break-words text-2xl font-extrabold tracking-tight text-[var(--text-primary)] sm:text-3xl lg:text-4xl">
                         {tutor.displayName}
                       </h1>
                       {tutor.verified && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-[#8B5CF6] dark:bg-violet-950/40">
+                        <Badge tone="primary" className="gap-1">
                           <CheckCircle className="h-3.5 w-3.5" />
                           {t("tutorProfile.verified")}
-                        </span>
+                        </Badge>
                       )}
                     </div>
-                    <p className="text-sm font-black uppercase tracking-[0.2em] text-[#8B5CF6]">
-                      {tutor.subject}
-                    </p>
-                    {tutor.headline && (
-                      <p className="mt-2 max-w-2xl text-sm font-medium text-slate-500 dark:text-zinc-400">
-                        {tutor.headline}
-                      </p>
-                    )}
-                    {location && (
-                      <p className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-slate-400">
-                        <MapPin className="h-4 w-4 shrink-0" />
-                        {location}
-                      </p>
-                    )}
-                  </div>
-                </div>
 
-                <div className="flex flex-wrap gap-3 sm:pb-1">
-                  {isStudent && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={handleBook}
-                        className="inline-flex items-center gap-2 rounded-2xl bg-[#8B5CF6] px-6 py-3.5 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-violet-300/30 transition hover:bg-violet-600 dark:shadow-violet-950/40"
-                      >
-                        <Sparkles className="h-4 w-4" />
-                        {t("find.bookSession")}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={favoriteLoading}
-                        onClick={toggleFavorite}
-                        aria-label={t("tutorProfile.favorite")}
-                        className={`inline-flex h-[3.25rem] w-[3.25rem] items-center justify-center rounded-2xl border transition ${
-                          favorited
-                            ? "border-[#8B5CF6] bg-violet-50 text-[#8B5CF6] dark:bg-violet-950/30"
-                            : "border-slate-200 bg-white text-slate-500 hover:border-violet-200 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-violet-900/50"
-                        }`}
-                      >
-                        <Heart
-                          className={`h-5 w-5 ${favorited ? "fill-[#8B5CF6]" : ""}`}
-                        />
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_340px]">
-            <div className="space-y-8">
-              <div className="grid gap-4 sm:grid-cols-3">
-                <StatCard
-                  icon={Star}
-                  label={t("tutorProfile.rating")}
-                  value={`${tutor.rating.toFixed(1)} · ${tutor.reviews}`}
-                />
-                <StatCard
-                  icon={Users}
-                  label={t("tutorProfile.lessonsCompleted")}
-                  value={String(tutor.lessonsCompleted)}
-                />
-                <StatCard
-                  icon={BookOpen}
-                  label={t("tutorProfile.experience")}
-                  value={
-                    tutor.experienceYears != null
-                      ? t("tutorProfile.experienceYears", {
-                          count: tutor.experienceYears,
-                        })
-                      : "—"
-                  }
-                />
-              </div>
-
-              <section className="rounded-[2rem] border border-slate-100 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-                <h2 className="mb-4 text-lg font-black uppercase tracking-widest text-[#1E293B] dark:text-zinc-100">
-                  {t("tutorProfile.about")}
-                </h2>
-                <p className="text-base font-medium leading-relaxed text-slate-600 dark:text-zinc-300">
-                  {tutor.bio}
-                </p>
-              </section>
-
-              {tutor.education && (
-                <section className="rounded-[2rem] border border-slate-100 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-                  <div className="mb-4 flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-[#8B5CF6] dark:bg-violet-950/40">
-                      <GraduationCap className="h-5 w-5" />
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-medium text-[var(--text-secondary)]">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Star className="h-4 w-4 shrink-0 fill-[var(--warning)] text-[var(--warning)]" />
+                        {t("tutorProfile.reviewsCount", {
+                          rating: tutor.rating.toFixed(1),
+                          count: tutor.reviews,
+                        })}
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <BookOpen className="h-4 w-4 shrink-0 text-[var(--primary)]" />
+                        {t("tutorProfile.lessonsTaught", { count: tutor.lessonsCompleted })}
+                      </span>
                     </div>
-                    <h2 className="text-lg font-black uppercase tracking-widest text-[#1E293B] dark:text-zinc-100">
-                      {t("tutorProfile.education")}
-                    </h2>
                   </div>
-                  <p className="text-base font-medium leading-relaxed text-slate-600 dark:text-zinc-300">
-                    {tutor.education}
-                  </p>
-                </section>
-              )}
-            </div>
 
-            <aside className="lg:sticky lg:top-24 lg:self-start">
-              <div className="overflow-hidden rounded-[2rem] border border-violet-100 bg-white shadow-lg dark:border-violet-900/30 dark:bg-zinc-950">
-                <div className="bg-gradient-to-br from-[#8B5CF6] to-[#6366F1] px-6 py-5">
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-white/70">
-                    {t("tutorProfile.sessionRate")}
-                  </p>
-                  <p className="mt-2 text-4xl font-black text-white">
-                    {hourlyRate}
-                    <span className="text-lg font-bold text-white/80">
-                      {t("find.perHour")}
-                    </span>
-                  </p>
-                </div>
-                <div className="space-y-4 p-6">
-                  <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 dark:bg-zinc-900">
-                    <span className="text-xs font-black uppercase tracking-widest text-slate-400">
-                      {t("tutorProfile.rating")}
-                    </span>
-                    <span className="flex items-center gap-1 text-sm font-black text-[#1E293B] dark:text-zinc-100">
-                      <Star className="h-4 w-4 fill-[#8B5CF6] text-[#8B5CF6]" />
-                      {tutor.rating.toFixed(1)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 dark:bg-zinc-900">
-                    <span className="text-xs font-black uppercase tracking-widest text-slate-400">
-                      {t("tutorProfile.reviewsLabel")}
-                    </span>
-                    <span className="text-sm font-black text-[#1E293B] dark:text-zinc-100">
-                      {tutor.reviews}
-                    </span>
-                  </div>
-                  {isStudent ? (
-                    <button
-                      type="button"
-                      onClick={handleBook}
-                      className="w-full rounded-2xl bg-[#8B5CF6] py-4 text-sm font-black uppercase tracking-widest text-white transition hover:bg-violet-600"
-                    >
-                      {t("find.bookSession")}
-                    </button>
-                  ) : (
-                    <p className="rounded-2xl border border-dashed border-slate-200 px-4 py-4 text-center text-sm font-semibold text-slate-400 dark:border-zinc-700">
-                      {t("tutorProfile.studentOnlyBook")}
+                  {tutor.headline && (
+                    <p className="max-w-2xl text-base leading-relaxed text-[var(--text-secondary)]">
+                      {tutor.headline}
                     </p>
                   )}
+
+                  <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-[var(--text-muted)]">
+                    <span className="inline-flex items-center gap-2">
+                      <GraduationCap className="h-4 w-4 text-[var(--primary)]" />
+                      {tutor.subject}
+                    </span>
+                    {location && (
+                      <span className="inline-flex items-center gap-2">
+                        <Globe className="h-4 w-4 text-[var(--primary)]" />
+                        {location}
+                      </span>
+                    )}
+                    <span className="inline-flex min-w-0 max-w-full items-center gap-2">
+                      <FormatIcon className="h-4 w-4 shrink-0 text-[var(--primary)]" />
+                      <span className="truncate">
+                        {formatLabel} • {t("tutorProfile.oneOnOne")}
+                      </span>
+                    </span>
+                  </div>
+
+                  <div className="border-t border-[var(--border)] pt-4">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                      {t("tutorProfile.subjectsLabel")}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {subjectTags.map((tag) => {
+                        const labelId = tagLabelId(tag)
+                        return (
+                          <span
+                            key={tag}
+                            className="rounded-full bg-[var(--surface-secondary)] px-3 py-1.5 text-xs font-semibold text-[var(--text-secondary)]"
+                          >
+                            {labelId ? t(labelId) : tag}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </aside>
+            </section>
+
+            <section className="overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-sm)]">
+              <nav
+                className="-mx-px flex gap-1 overflow-x-auto border-b border-[var(--border)] px-4 [-ms-overflow-style:none] [scrollbar-width:none] sm:gap-4 sm:px-6 [&::-webkit-scrollbar]:hidden"
+                role="tablist"
+              >
+                {tabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`shrink-0 border-b-2 px-1 py-3 text-xs font-semibold transition sm:py-4 sm:text-sm ${
+                      activeTab === tab.id
+                        ? "border-[var(--primary)] text-[var(--primary)]"
+                        : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </nav>
+
+              <div key={activeTab} className="tutora-tab-panel p-4 sm:p-6 lg:p-8">
+                {activeTab === "about" && (
+                  <div className="space-y-10">
+                    <section className="space-y-4 border-b border-[var(--border)] pb-10">
+                      <h2 className="text-xl font-bold text-[var(--text-primary)]">
+                        {t("tutorProfile.aboutTitle", { name: firstName })}
+                      </h2>
+                      <p className="max-w-3xl break-words text-base leading-7 text-[var(--text-secondary)]">
+                        {bioBody}
+                      </p>
+                      {highlight && (
+                        <blockquote className="flex gap-3 rounded-[var(--radius-card)] border border-[var(--warning-soft)] bg-[var(--warning-soft)]/40 px-4 py-4">
+                          <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-[var(--warning)]" />
+                          <p className="text-sm font-medium italic leading-relaxed text-[var(--text-primary)]">
+                            {highlight}
+                          </p>
+                        </blockquote>
+                      )}
+                    </section>
+
+                    <section className="space-y-4 border-b border-[var(--border)] pb-10">
+                      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+                      <MetricCard
+                        icon={Award}
+                        value={
+                          tutor.experienceYears != null
+                            ? `${tutor.experienceYears}+`
+                            : "—"
+                        }
+                        label={t("tutorProfile.yearsExperience")}
+                      />
+                      <MetricCard
+                        icon={BookOpen}
+                        value={`${tutor.lessonsCompleted}+`}
+                        label={t("tutorProfile.lessonsCompleted")}
+                      />
+                      <MetricCard
+                        icon={Users}
+                        value={`${Math.max(tutor.reviews, Math.round(tutor.lessonsCompleted * 0.35))}+`}
+                        label={t("tutorProfile.happyStudents")}
+                      />
+                      <MetricCard
+                        icon={Star}
+                        value={satisfaction != null ? `${satisfaction}%` : "—"}
+                        label={t("tutorProfile.satisfactionRate")}
+                      />
+                      </div>
+                    </section>
+
+                    {subjectTags.length > 0 && (
+                      <section className="space-y-3 border-b border-[var(--border)] pb-10">
+                        <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                          {t("tutorProfile.specializations")}
+                        </h3>
+                        <div className="flex flex-wrap gap-2">
+                          {subjectTags.map((tag) => {
+                            const labelId = tagLabelId(tag)
+                            return (
+                              <span
+                                key={tag}
+                                className="rounded-full border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-[var(--text-secondary)]"
+                              >
+                                {labelId ? t(labelId) : tag}
+                              </span>
+                            )
+                          })}
+                        </div>
+                      </section>
+                    )}
+
+                    <section className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_280px]">
+                      <div className="min-w-0 space-y-4">
+                        <h3 className="text-lg font-bold text-[var(--text-primary)]">
+                          {t("tutorProfile.recentReviews")}
+                        </h3>
+                        <p className="rounded-[var(--radius-card)] border border-dashed border-[var(--border)] px-4 py-8 text-center text-sm text-[var(--text-muted)]">
+                          {t("tutorProfile.noReviewsYet")}
+                        </p>
+                      </div>
+
+                      <div className="min-w-0 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface-secondary)] p-5 xl:max-w-[280px] xl:justify-self-end">
+                        <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                          {t("tutorProfile.reviewsOverview")}
+                        </h3>
+                        <div className="mt-4 flex items-end gap-2">
+                          <span className="text-4xl font-extrabold text-[var(--text-primary)]">
+                            {tutor.rating.toFixed(1)}
+                          </span>
+                          <div className="mb-1 flex gap-0.5">
+                            {Array.from({ length: 5 }).map((_, index) => (
+                              <Star
+                                key={index}
+                                className={`h-4 w-4 ${
+                                  index < Math.round(tutor.rating)
+                                    ? "fill-[var(--warning)] text-[var(--warning)]"
+                                    : "text-[var(--border-strong)]"
+                                }`}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        <div className="mt-5 space-y-2">
+                          {[5, 4, 3, 2, 1].map((stars, index) => {
+                            const count = distribution[4 - index] ?? 0
+                            const width =
+                              tutor.reviews > 0 ? Math.max(4, (count / tutor.reviews) * 100) : 0
+                            return (
+                              <div key={stars} className="flex items-center gap-2 text-xs">
+                                <span className="w-3 text-[var(--text-muted)]">{stars}</span>
+                                <div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--border)]">
+                                  <div
+                                    className="h-full rounded-full bg-[var(--primary)]"
+                                    style={{ width: `${width}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </section>
+                  </div>
+                )}
+
+                {activeTab === "subjects" && (
+                  <div className="space-y-4">
+                    <h2 className="text-xl font-bold text-[var(--text-primary)]">
+                      {t("tutorProfile.tab.subjects")}
+                    </h2>
+                    <div className="flex flex-wrap gap-2">
+                      {subjectTags.map((tag) => {
+                        const labelId = tagLabelId(tag)
+                        return (
+                          <Badge key={tag} tone="muted" className="px-4 py-2 text-sm">
+                            {labelId ? t(labelId) : tag}
+                          </Badge>
+                        )
+                      })}
+                    </div>
+                    {tutor.subjects && tutor.subjects.length > 0 && (
+                      <ul className="space-y-3 pt-2">
+                        {tutor.subjects.map((subject) => (
+                          <li
+                            key={subject.id}
+                            className="flex items-center justify-between rounded-[var(--radius-card)] border border-[var(--border)] px-4 py-3"
+                          >
+                            <span className="font-semibold text-[var(--text-primary)]">
+                              {subject.name}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === "reviews" && (
+                  <div className="space-y-6">
+                    <div className="flex flex-wrap items-end justify-between gap-4">
+                      <div>
+                        <h2 className="text-xl font-bold text-[var(--text-primary)]">
+                          {t("tutorProfile.tab.reviews")}
+                        </h2>
+                        <p className="mt-1 text-sm text-[var(--text-muted)]">
+                          {t("tutorProfile.reviewsCount", {
+                            rating: tutor.rating.toFixed(1),
+                            count: tutor.reviews,
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="rounded-[var(--radius-card)] border border-dashed border-[var(--border)] px-4 py-10 text-center text-sm text-[var(--text-muted)]">
+                      {t("tutorProfile.noReviewsYet")}
+                    </p>
+                  </div>
+                )}
+
+                {activeTab === "availability" && (
+                  <div className="space-y-3">
+                    <h2 className="text-xl font-bold text-[var(--text-primary)]">
+                      {t("tutorProfile.tab.availability")}
+                    </h2>
+                    <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
+                      {t("tutorProfile.availabilityHint")}
+                    </p>
+                  </div>
+                )}
+
+                {activeTab === "education" && (
+                  <div className="space-y-4">
+                    <h2 className="text-xl font-bold text-[var(--text-primary)]">
+                      {t("tutorProfile.tab.education")}
+                    </h2>
+                    {tutor.education ? (
+                      <p className="whitespace-pre-line text-base leading-relaxed text-[var(--text-secondary)]">
+                        {tutor.education}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-[var(--text-muted)]">
+                        {t("tutorProfile.educationEmpty")}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </section>
           </div>
         </div>
-      </div>
-
-      <BookingModal
-        tutor={tutor}
-        open={bookingOpen}
-        onClose={() => setBookingOpen(false)}
-      />
-    </>
+      </Container>
+    </div>
   )
 }

@@ -16,10 +16,14 @@ import {
   cancelReasonFromPrisma,
   cancelReasonLabel,
 } from '../bookings/dto/cancel-booking.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class ChatService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+  ) {}
 
   async ensureDirectConversation(
     tutorProfileId: string,
@@ -195,6 +199,33 @@ export class ChatService {
 
       return created;
     });
+
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: {
+        tutorProfile: { select: { userId: true, displayName: true } },
+        studentProfile: { select: { userId: true, displayName: true } },
+      },
+    });
+
+    if (conversation) {
+      const isTutorSender = user.roles.includes(UserRole.TUTOR);
+      const senderName = isTutorSender
+        ? (conversation.tutorProfile?.displayName ?? 'Tutor')
+        : (conversation.studentProfile?.displayName ?? 'Student');
+      const recipientUserId = isTutorSender
+        ? conversation.studentProfile?.userId
+        : conversation.tutorProfile?.userId;
+
+      if (recipientUserId) {
+        await this.notificationsService.notifyNewMessage({
+          recipientUserId,
+          senderName,
+          conversationId,
+          preview: content.trim(),
+        });
+      }
+    }
 
     return {
       id: message.id,

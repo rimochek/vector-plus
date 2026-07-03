@@ -12,6 +12,12 @@ import {
   CreateAvailabilitySlotDto,
   SaveWeeklyScheduleDto,
 } from './dto/availability.dto';
+import {
+  addCalendarDaysInTimeZone,
+  getDatePartsInTimeZone,
+  normalizeTimeString,
+  zonedTimeToUtc,
+} from '../common/timezone.util';
 
 @Injectable()
 export class AvailabilityService {
@@ -88,7 +94,10 @@ export class AvailabilityService {
     for (const rule of rules) {
       if (rule.dayOfWeek == null || !rule.startTime || !rule.endTime) continue;
       const list = dayMap.get(rule.dayOfWeek) ?? [];
-      list.push({ startTime: rule.startTime, endTime: rule.endTime });
+      list.push({
+        startTime: normalizeTimeString(rule.startTime),
+        endTime: normalizeTimeString(rule.endTime),
+      });
       dayMap.set(rule.dayOfWeek, list);
     }
 
@@ -97,11 +106,7 @@ export class AvailabilityService {
       slots: dayMap.get(dayOfWeek) ?? [],
     }));
 
-    const timezone =
-      rules[0]?.timezone ??
-      dbUser?.timezone ??
-      Intl.DateTimeFormat().resolvedOptions().timeZone ??
-      'UTC';
+    const timezone = rules[0]?.timezone ?? dbUser?.timezone ?? 'UTC';
 
     return { timezone, schedule };
   }
@@ -113,6 +118,11 @@ export class AvailabilityService {
     const weeksAhead = dto.weeksAhead ?? 8;
 
     await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: user.id },
+        data: { timezone: dto.timezone },
+      });
+
       await tx.tutorAvailabilityRule.updateMany({
         where: {
           tutorProfileId,
@@ -243,34 +253,72 @@ export class AvailabilityService {
     for (const rule of rules) {
       if (rule.dayOfWeek == null || !rule.startTime || !rule.endTime) continue;
 
-      const cursor = new Date(now);
-      cursor.setHours(0, 0, 0, 0);
+      const timeZone = rule.timezone || 'UTC';
+      const [sh, sm] = normalizeTimeString(rule.startTime).split(':').map(Number);
+      const [eh, em] = normalizeTimeString(rule.endTime).split(':').map(Number);
 
-      while (cursor <= endDate) {
-        if (cursor.getDay() === rule.dayOfWeek) {
-          const [sh, sm] = rule.startTime.split(':').map(Number);
-          const [eh, em] = rule.endTime.split(':').map(Number);
-          const rangeStart = new Date(cursor);
-          rangeStart.setHours(sh, sm ?? 0, 0, 0);
-          const rangeEnd = new Date(cursor);
-          rangeEnd.setHours(eh, em ?? 0, 0, 0);
+      const startParts = getDatePartsInTimeZone(now, timeZone);
+      const lastDay = getDatePartsInTimeZone(endDate, timeZone);
+      const totalDays =
+        weeksAhead * 7 +
+        Math.ceil((endDate.getTime() - now.getTime()) / 86_400_000) +
+        2;
 
-          for (const hourly of this.splitIntoHourlySlots(rangeStart, rangeEnd)) {
-            if (
-              hourly.startsAt > now &&
-              !this.isBlocked(hourly.startsAt, hourly.endsAt, blocked)
-            ) {
-              const result = await this.createSlotIfFree(
-                tutorProfileId,
-                hourly.startsAt,
-                hourly.endsAt,
-                rule.id,
+      for (let i = 0; i < totalDays; i++) {
+        const parts =
+          i === 0
+            ? startParts
+            : addCalendarDaysInTimeZone(
+                startParts.year,
+                startParts.month,
+                startParts.day,
+                i,
+                timeZone,
               );
-              if (result) created++;
-            }
+
+        if (
+          parts.year > lastDay.year ||
+          (parts.year === lastDay.year && parts.month > lastDay.month) ||
+          (parts.year === lastDay.year &&
+            parts.month === lastDay.month &&
+            parts.day > lastDay.day)
+        ) {
+          break;
+        }
+
+        if (parts.dayOfWeek !== rule.dayOfWeek) continue;
+
+        const rangeStart = zonedTimeToUtc(
+          parts.year,
+          parts.month,
+          parts.day,
+          sh,
+          sm ?? 0,
+          timeZone,
+        );
+        const rangeEnd = zonedTimeToUtc(
+          parts.year,
+          parts.month,
+          parts.day,
+          eh,
+          em ?? 0,
+          timeZone,
+        );
+
+        for (const hourly of this.splitIntoHourlySlots(rangeStart, rangeEnd)) {
+          if (
+            hourly.startsAt > now &&
+            !this.isBlocked(hourly.startsAt, hourly.endsAt, blocked)
+          ) {
+            const result = await this.createSlotIfFree(
+              tutorProfileId,
+              hourly.startsAt,
+              hourly.endsAt,
+              rule.id,
+            );
+            if (result) created++;
           }
         }
-        cursor.setDate(cursor.getDate() + 1);
       }
     }
 

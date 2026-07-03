@@ -1,5 +1,5 @@
 -- =============================================================================
--- Vector+ Tutor Marketplace — Production PostgreSQL Schema
+-- Tutora Tutor Marketplace - Production PostgreSQL Schema
 -- Target: PostgreSQL 15+
 -- Conventions: UUID PKs, TIMESTAMPTZ (UTC storage), snake_case, soft deletes
 -- =============================================================================

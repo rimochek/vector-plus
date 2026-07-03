@@ -7,12 +7,17 @@ import {
   UnauthorizedException,
   Req,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
+import { GoogleAuthDto, GoogleLinkDto } from './dto/google-auth.dto';
 import { JwtService } from '@nestjs/jwt';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import type { AuthUser } from '../common/decorators/current-user.decorator';
 import {
   REFRESH_COOKIE,
   clearRefreshTokenCookie,
@@ -54,6 +59,30 @@ export class AuthController {
     );
     const { refreshToken: _rt, refreshTokenMaxAgeMs: _ms, ...body } = result;
     return body;
+  }
+
+  @Post('google')
+  async googleAuth(
+    @Body() dto: GoogleAuthDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.authenticateWithGoogle(dto);
+    setRefreshTokenCookie(
+      res,
+      result.refreshToken,
+      result.refreshTokenMaxAgeMs,
+    );
+    const { refreshToken: _rt, refreshTokenMaxAgeMs: _ms, ...body } = result;
+    return body;
+  }
+
+  @Post('google/link')
+  @UseGuards(JwtAuthGuard)
+  async linkGoogle(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: GoogleLinkDto,
+  ) {
+    return this.authService.linkGoogleAccount(user.id, dto.credential);
   }
 
   @Post('refresh')

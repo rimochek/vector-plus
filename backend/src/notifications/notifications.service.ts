@@ -195,4 +195,26 @@ export class NotificationsService {
       },
     );
   }
+
+  async notifyNewMessage(params: {
+    recipientUserId: string;
+    senderName: string;
+    conversationId: string;
+    preview: string;
+  }) {
+    const trimmed = params.preview.trim();
+    const preview =
+      trimmed.length > 120 ? `${trimmed.slice(0, 117)}...` : trimmed;
+
+    return this.createInApp(
+      params.recipientUserId,
+      'chat.message',
+      `New message from ${params.senderName}`,
+      preview || 'You received a new message.',
+      {
+        conversationId: params.conversationId,
+        senderName: params.senderName,
+      },
+    );
+  }
 }

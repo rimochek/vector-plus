@@ -20,17 +20,14 @@ CREATE DATABASE vector_plus;
 
 ### 2. Переменные окружения
 
-Обновите файл `.env` со своими параметрами:
+Скопируйте `.env.example` в **корень проекта** (не в `backend/`) и задайте параметры:
 
 ```
-PORT=3000
-DATABASE_HOST=localhost
-DATABASE_PORT=5001
-DATABASE_USER=postgres
-DATABASE_PASSWORD=your_password
-DATABASE_NAME=vector_plus
+# См. .env.example в корне репозитория
+DATABASE_URL=postgresql://...
 JWT_SECRET=your-secure-secret-key-here
-JWT_EXPIRATION=3600
+JWT_ACCESS_EXPIRATION=900
+FRONTEND_URL=http://localhost:3000
 ```
 
 ### 3. Запуск сервера

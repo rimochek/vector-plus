@@ -1,21 +1,34 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { Search, SlidersHorizontal, Star, CheckCircle, Loader2 } from "lucide-react"
+import {
+  Search,
+  SlidersHorizontal,
+  Sparkles,
+  X,
+} from "lucide-react"
 import { useTranslations } from "@/lib/i18n/locale-context"
 import type { MessageId } from "@/lib/i18n/messages"
 import { BudgetRangeSlider } from "@/app/components/budget-range-slider"
+import { TutorCard } from "@/app/components/tutor-card"
+import { Container } from "@/app/components/ui/container"
+import { StickySidebar } from "@/app/components/ui/sticky-sidebar"
+import { Chip } from "@/app/components/ui/chip"
+import { Button } from "@/app/components/ui/button"
+import { EmptyState } from "@/app/components/ui/empty-state"
+import { TutorCardSkeleton } from "@/app/components/ui/skeleton"
 import {
-  LEARNING_TOPIC_IDS,
-  TIME_SLOT_IDS,
+  DISCIPLINE_SUBJECTS,
+  EXAM_IDS,
+  LANGUAGE_IDS,
   TUTORS_PRICE_PRESET,
+  disciplineLabelId,
+  topicLabelId,
+  tutorMatchesTopic,
   type LearningTopicId,
-  type TimeSlotId,
   type TutorSortOption,
 } from "@/app/components/tutors-data"
-import { getStoredUser, isLoggedIn, refreshCurrentUser, type StoredUser } from "@/lib/auth-client"
+import { getStoredUser, refreshCurrentUser, type StoredUser } from "@/lib/auth-client"
 import { api, type ApiTutor } from "@/lib/api-client"
 import { formatTenge, tutorHourlyRateTenge } from "@/lib/currency"
 import {
@@ -23,21 +36,11 @@ import {
   type StudentTutorFilterPrefs,
 } from "@/lib/student-preferences"
 
-const SUBJECTS = [
-  "All",
-  "Mathematics",
-  "Computer Science",
-  "Languages",
-  "Physics",
-] as const
+const TEACHING_FORMAT_IDS = ["online", "inPerson", "hybrid"] as const
+type TeachingFormatId = (typeof TEACHING_FORMAT_IDS)[number]
 
-function topicLabelId(id: LearningTopicId): MessageId {
-  if (id === "programming") return "find.topic.programming"
-  return `register.tag.${id}` as MessageId
-}
-
-function timeLabelId(id: TimeSlotId): MessageId {
-  return `find.time.${id}` as MessageId
+function formatLabelId(id: TeachingFormatId): MessageId {
+  return `find.format.${id}` as MessageId
 }
 
 const DEFAULT_FILTER_PREFS: StudentTutorFilterPrefs = {
@@ -47,24 +50,166 @@ const DEFAULT_FILTER_PREFS: StudentTutorFilterPrefs = {
   searchHint: "",
 }
 
+function FilterPanel({
+  subject,
+  setSubject,
+  selectedTopics,
+  toggleTopic,
+  selectedFormats,
+  toggleFormat,
+  priceMin,
+  priceMax,
+  setPriceMin,
+  setPriceMax,
+  clearFilters,
+  t,
+}: {
+  subject: string
+  setSubject: (v: string) => void
+  selectedTopics: LearningTopicId[]
+  toggleTopic: (id: LearningTopicId) => void
+  selectedFormats: TeachingFormatId[]
+  toggleFormat: (id: TeachingFormatId) => void
+  priceMin: number
+  priceMax: number
+  setPriceMin: (v: number) => void
+  setPriceMax: (v: number) => void
+  clearFilters: () => void
+  t: (id: MessageId, params?: Record<string, string | number>) => string
+}) {
+  return (
+    <div className="tutora-card space-y-6 p-6">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <SlidersHorizontal className="h-4 w-4 text-[var(--primary-to)]" />
+          <h3 className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--text-primary)]">
+            {t("find.filtersTitle")}
+          </h3>
+        </div>
+        <button
+          type="button"
+          onClick={clearFilters}
+          className="text-xs font-semibold text-[var(--primary-to)] hover:underline"
+        >
+          {t("find.clearFilters")}
+        </button>
+      </div>
+
+      <section>
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+          {t("find.disciplinesLabel")}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {DISCIPLINE_SUBJECTS.map((value) => (
+            <Chip
+              key={value}
+              selected={subject === value}
+              onClick={() => setSubject(value)}
+            >
+              {t(disciplineLabelId(value))}
+            </Chip>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+          {t("find.languagesLabel")}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {LANGUAGE_IDS.map((id) => (
+            <Chip
+              key={id}
+              selected={selectedTopics.includes(id)}
+              onClick={() => toggleTopic(id)}
+            >
+              {t(topicLabelId(id))}
+            </Chip>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+          {t("find.examsLabel")}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {EXAM_IDS.map((id) => (
+            <Chip
+              key={id}
+              selected={selectedTopics.includes(id)}
+              onClick={() => toggleTopic(id)}
+            >
+              {t(topicLabelId(id))}
+            </Chip>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+          {t("find.priceRangeLabel")}
+        </p>
+        <BudgetRangeSlider
+          compact
+          min={TUTORS_PRICE_PRESET.min}
+          max={TUTORS_PRICE_PRESET.max}
+          step={TUTORS_PRICE_PRESET.step}
+          valueMin={priceMin}
+          valueMax={priceMax}
+          onChange={(min, max) => {
+            setPriceMin(min)
+            setPriceMax(max)
+          }}
+          formatValue={(value) => formatTenge(value)}
+          minLabel={t("find.priceMinLabel")}
+          maxLabel={t("find.priceMaxLabel")}
+        />
+      </section>
+
+      {/* Availability-by-time filter hidden for closed beta: weekly rules lack reliable cross-timezone matching. */}
+
+      <section>
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+          {t("find.formatLabel")}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {TEACHING_FORMAT_IDS.map((id) => (
+            <Chip
+              key={id}
+              selected={selectedFormats.includes(id)}
+              onClick={() => toggleFormat(id)}
+            >
+              {t(formatLabelId(id))}
+            </Chip>
+          ))}
+        </div>
+      </section>
+    </div>
+  )
+}
+
 export const FindTutors = () => {
   const { t } = useTranslations()
-  const router = useRouter()
   const savedPrefsRef = useRef(DEFAULT_FILTER_PREFS)
   const [apiTutors, setApiTutors] = useState<ApiTutor[]>([])
   const [tutorsLoading, setTutorsLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [subject, setSubject] = useState<string>("All")
   const [selectedTopics, setSelectedTopics] = useState<LearningTopicId[]>([])
-  const [selectedTimes, setSelectedTimes] = useState<TimeSlotId[]>([])
+  const [selectedFormats, setSelectedFormats] = useState<TeachingFormatId[]>([])
   const [priceMin, setPriceMin] = useState<number>(TUTORS_PRICE_PRESET.defaultMin)
   const [priceMax, setPriceMax] = useState<number>(TUTORS_PRICE_PRESET.defaultMax)
   const [sort, setSort] = useState<TutorSortOption>("recommendation")
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
 
   useEffect(() => {
     const user = getStoredUser()
+    const formatsQuery =
+      selectedFormats.length > 0 ? selectedFormats.join(",") : undefined
+    setTutorsLoading(true)
     api.tutors
-      .list()
+      .list(formatsQuery)
       .then((tutors) => {
         const selfUserId = user?.id
         setApiTutors(
@@ -75,16 +220,14 @@ export const FindTutors = () => {
       })
       .catch(() => setApiTutors([]))
       .finally(() => setTutorsLoading(false))
-  }, [])
+  }, [selectedFormats])
 
   useEffect(() => {
     const loadPreferences = async () => {
       let user: StoredUser | null = getStoredUser()
-
       if (localStorage.getItem("token")) {
         user = (await refreshCurrentUser()) ?? getStoredUser()
       }
-
       const prefs = getStudentTutorFilterPrefs(user, DEFAULT_FILTER_PREFS)
       const clampedPrefs = {
         ...prefs,
@@ -104,9 +247,7 @@ export const FindTutors = () => {
       setPriceMin(clampedPrefs.priceMin)
       setPriceMax(clampedPrefs.priceMax)
       if (prefs.topics.length > 0) setSelectedTopics(prefs.topics)
-      if (prefs.searchHint) setSearch(prefs.searchHint)
     }
-
     loadPreferences()
   }, [])
 
@@ -116,18 +257,18 @@ export const FindTutors = () => {
     )
   }
 
-  const toggleTime = (id: TimeSlotId) => {
-    setSelectedTimes((prev) =>
+  const toggleFormat = (id: TeachingFormatId) => {
+    setSelectedFormats((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     )
   }
 
   const clearFilters = () => {
     const prefs = savedPrefsRef.current
-    setSearch(prefs.searchHint)
+    setSearch("")
     setSubject("All")
     setSelectedTopics(prefs.topics)
-    setSelectedTimes([])
+    setSelectedFormats([])
     setPriceMin(prefs.priceMin)
     setPriceMax(prefs.priceMax)
     setSort("recommendation")
@@ -135,7 +276,6 @@ export const FindTutors = () => {
 
   const filteredTutors = useMemo(() => {
     const query = search.trim().toLowerCase()
-
     const filtered = apiTutors.filter((tutor) => {
       const haystack = [
         tutor.displayName,
@@ -143,32 +283,31 @@ export const FindTutors = () => {
         tutor.bio,
         tutor.city ?? "",
         tutor.country ?? "",
+        tutor.education ?? "",
       ]
         .join(" ")
         .toLowerCase()
-
       const matchesSearch = !query || haystack.includes(query)
       const matchesSubject = subject === "All" || tutor.subject === subject
+      const matchesTopics =
+        selectedTopics.length === 0 ||
+        selectedTopics.some((topic) => tutorMatchesTopic(tutor.tags, topic))
       const tutorPrice = tutorHourlyRateTenge(tutor.defaultHourlyRateCents)
-      const matchesPrice = tutorPrice >= priceMin && tutorPrice <= priceMax
-
-      return matchesSearch && matchesSubject && matchesPrice
+      const matchesPrice =
+        tutorPrice >= priceMin && tutorPrice <= priceMax
+      return matchesSearch && matchesSubject && matchesTopics && matchesPrice
     })
 
     const sorted = [...filtered]
     switch (sort) {
       case "price_asc":
         sorted.sort(
-          (a, b) =>
-            tutorHourlyRateTenge(a.defaultHourlyRateCents) -
-            tutorHourlyRateTenge(b.defaultHourlyRateCents),
+          (a, b) => a.defaultHourlyRateCents - b.defaultHourlyRateCents,
         )
         break
       case "price_desc":
         sorted.sort(
-          (a, b) =>
-            tutorHourlyRateTenge(b.defaultHourlyRateCents) -
-            tutorHourlyRateTenge(a.defaultHourlyRateCents),
+          (a, b) => b.defaultHourlyRateCents - a.defaultHourlyRateCents,
         )
         break
       case "popularity":
@@ -180,262 +319,176 @@ export const FindTutors = () => {
       case "rating":
         sorted.sort((a, b) => b.rating - a.rating)
         break
-      case "recommendation":
       default:
         sorted.sort((a, b) => b.rating * b.reviews - a.rating * a.reviews)
-        break
     }
-
     return sorted
-  }, [apiTutors, search, subject, priceMin, priceMax, sort])
+  }, [apiTutors, search, subject, selectedTopics, priceMin, priceMax, sort])
 
-  const subjectLabel = (value: string) => {
-    const map: Record<string, MessageId> = {
-      All: "find.allDisciplines",
-      Mathematics: "find.math",
-      "Computer Science": "find.cs",
-      Languages: "find.languages",
-      Physics: "find.physics",
-    }
-    return t(map[value] ?? "find.allDisciplines")
+  const filterProps = {
+    subject,
+    setSubject,
+    selectedTopics,
+    toggleTopic,
+    selectedFormats,
+    toggleFormat,
+    priceMin,
+    priceMax,
+    setPriceMin,
+    setPriceMax,
+    clearFilters,
+    t,
   }
 
   return (
-    <div className="mx-auto w-full min-w-0 max-w-7xl overflow-x-hidden px-4 py-8 sm:px-6 sm:py-12 lg:px-8 lg:py-16">
-      <div className="mb-8 min-w-0 max-w-2xl sm:mb-10">
-        <h2 className="mb-3 break-words text-3xl font-black tracking-tight text-[#1E293B] dark:text-zinc-50 sm:mb-4 sm:text-4xl lg:text-5xl">
-          {t("find.title")}
-        </h2>
-        <p className="text-base font-semibold text-slate-400 dark:text-zinc-500 sm:text-lg">
-          {t("find.subtitle")}
-        </p>
-      </div>
-
-      <div className="mb-8">
-        <div className="group relative">
-          <Search className="absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-300 transition-colors group-focus-within:text-[#8B5CF6] dark:text-zinc-600" />
-          <input
-            type="text"
-            placeholder={t("find.searchPlaceholder")}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-[2rem] border-2 border-slate-100 bg-white py-5 pl-14 pr-6 text-base font-medium text-[#1E293B] shadow-sm outline-none transition-all placeholder:text-slate-400 focus:border-[#8B5CF6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500"
-          />
+    <div className="pb-16">
+      <Container size="search" className="pt-6 sm:pt-8">
+        <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h1 className="mb-2 text-3xl font-extrabold tracking-tight text-[var(--text-primary)] sm:text-4xl">
+              {t("find.title")}
+            </h1>
+            <p className="max-w-2xl text-base text-[var(--text-muted)]">
+              {t("find.subtitle")}
+            </p>
+          </div>
+          <p className="hidden text-sm font-semibold text-[var(--text-muted)] lg:block">
+            {t("find.resultsCount", { count: filteredTutors.length })}
+          </p>
         </div>
-      </div>
+      </Container>
 
-      <div className="grid min-w-0 grid-cols-1 gap-10 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
-        <aside className="h-fit min-w-0 max-w-full space-y-6 overflow-hidden rounded-[2rem] border border-slate-100 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:p-6 lg:sticky lg:top-24">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-2">
-              <SlidersHorizontal className="h-5 w-5 shrink-0 text-[#8B5CF6]" />
-              <h3 className="text-xs font-black uppercase tracking-widest text-[#1E293B] dark:text-zinc-100 sm:text-sm">
-                {t("find.filtersTitle")}
-              </h3>
-            </div>
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="shrink-0 text-xs font-bold text-[#8B5CF6] hover:underline"
-            >
-              {t("find.clearFilters")}
-            </button>
-          </div>
-
-          <div>
-            <p className="mb-2 text-xs font-black uppercase tracking-[0.16em] text-slate-400 dark:text-zinc-500">
-              {t("find.allDisciplines")}
-            </p>
-            <select
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              className="w-full cursor-pointer rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-[#1E293B] outline-none focus:border-[#8B5CF6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
-            >
-              {SUBJECTS.map((value) => (
-                <option key={value} value={value}>
-                  {subjectLabel(value)}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <p className="mb-3 text-xs font-black uppercase tracking-[0.16em] text-slate-400 dark:text-zinc-500">
-              {t("find.learnLabel")}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {LEARNING_TOPIC_IDS.map((id) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => toggleTopic(id)}
-                  className={`rounded-full px-3 py-2 text-[10px] font-black uppercase tracking-wider transition ${
-                    selectedTopics.includes(id)
-                      ? "bg-[#8B5CF6] text-white"
-                      : "border border-slate-200 bg-slate-50 text-slate-600 hover:border-violet-200 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
-                  }`}
-                >
-                  {t(topicLabelId(id))}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <p className="mb-2 text-xs font-black uppercase tracking-[0.16em] text-slate-400 dark:text-zinc-500">
-              {t("find.priceRangeLabel")}
-            </p>
-            <BudgetRangeSlider
-              compact
-              min={TUTORS_PRICE_PRESET.min}
-              max={TUTORS_PRICE_PRESET.max}
-              step={TUTORS_PRICE_PRESET.step}
-              valueMin={priceMin}
-              valueMax={priceMax}
-              onChange={(min, max) => {
-                setPriceMin(min)
-                setPriceMax(max)
-              }}
-              formatValue={(value) => formatTenge(value)}
-              minLabel={t("find.priceMinLabel")}
-              maxLabel={t("find.priceMaxLabel")}
+      <div className="sticky top-[72px] z-40 border-b border-[var(--border)] bg-[var(--bg)]/95 py-3 backdrop-blur-md supports-[backdrop-filter]:bg-[var(--bg)]/90">
+        <Container size="search">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--text-muted)]" />
+            <input
+              type="search"
+              placeholder={t("find.searchPlaceholder")}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="tutora-glass-input h-16 w-full pl-14 pr-5 text-base text-[var(--text-primary)] outline-none transition placeholder:text-[var(--text-muted)] focus:border-[var(--primary-to)] focus:ring-2 focus:ring-[var(--glow)]"
             />
           </div>
-
-          <div>
-            <p className="mb-3 text-xs font-black uppercase tracking-[0.16em] text-slate-400 dark:text-zinc-500">
-              {t("find.availabilityLabel")}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {TIME_SLOT_IDS.map((id) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => toggleTime(id)}
-                  className={`rounded-full px-3 py-2 text-[10px] font-black uppercase tracking-wider transition ${
-                    selectedTimes.includes(id)
-                      ? "bg-[#8B5CF6] text-white"
-                      : "border border-slate-200 bg-slate-50 text-slate-600 hover:border-violet-200 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
-                  }`}
-                >
-                  {t(timeLabelId(id))}
-                </button>
-              ))}
-            </div>
-          </div>
-        </aside>
-
-        <div className="min-w-0">
-          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="min-w-0 text-sm font-bold text-slate-500 dark:text-zinc-400">
-              {t("find.resultsCount", { count: filteredTutors.length })}
-            </p>
-            <label className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
-              <span className="shrink-0 text-xs font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500">
-                {t("find.sortLabel")}
-              </span>
-              <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value as TutorSortOption)}
-                className="w-full min-w-0 cursor-pointer rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-[#1E293B] outline-none focus:border-[#8B5CF6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 sm:w-auto"
-              >
-                <option value="recommendation">
-                  {t("find.sort.recommendation")}
-                </option>
-                <option value="price_asc">{t("find.sort.priceAsc")}</option>
-                <option value="price_desc">{t("find.sort.priceDesc")}</option>
-                <option value="popularity">{t("find.sort.popularity")}</option>
-                <option value="reviews">{t("find.sort.reviews")}</option>
-                <option value="rating">{t("find.sort.rating")}</option>
-              </select>
-            </label>
-          </div>
-
-          {tutorsLoading ? (
-            <div className="flex justify-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin text-[#8B5CF6]" />
-            </div>
-          ) : filteredTutors.length === 0 ? (
-            <div className="rounded-[2rem] border border-dashed border-slate-200 bg-slate-50/80 p-12 text-center dark:border-zinc-700 dark:bg-zinc-900/50">
-              <p className="font-semibold text-slate-500 dark:text-zinc-400">
-                {t("find.noResults")}
-              </p>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-5">
-              {filteredTutors.map((tutor) => (
-                <article
-                  key={tutor.id}
-                  className="group relative flex flex-col overflow-hidden rounded-[2rem] border border-slate-100 bg-white transition-all duration-300 hover:border-violet-200 hover:shadow-[0_20px_50px_rgba(0,0,0,0.08)] dark:border-zinc-800 dark:bg-zinc-950 dark:hover:border-violet-900 dark:hover:shadow-[0_20px_50px_rgba(0,0,0,0.35)] sm:flex-row"
-                >
-                  <Link
-                    href={`/tutors/${tutor.id}`}
-                    className="absolute inset-0 z-0 rounded-[2rem]"
-                    aria-label={tutor.displayName}
-                  />
-
-                  <div className="pointer-events-none relative flex h-52 w-full shrink-0 items-center justify-center overflow-hidden bg-gradient-to-br from-[#8B5CF6] to-[#6366F1] sm:h-auto sm:w-56 md:w-64">
-                    <span className="text-5xl font-black text-white/90">
-                      {tutor.displayName.charAt(0)}
-                    </span>
-                    <div className="absolute left-5 top-5 flex items-center gap-2 rounded-2xl border border-slate-100/80 bg-white px-4 py-2 text-sm font-black text-[#1E293B] shadow-lg dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
-                      <Star className="h-4 w-4 fill-[#8B5CF6] text-[#8B5CF6]" />
-                      {tutor.rating.toFixed(1)}
-                    </div>
-                  </div>
-
-                  <div className="pointer-events-none relative flex min-w-0 flex-1 flex-col gap-5 p-6 sm:flex-row sm:items-center sm:p-7">
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-2 flex flex-wrap items-center gap-2">
-                        <h3 className="text-2xl font-black leading-none text-[#1E293B] transition group-hover:text-[#8B5CF6] dark:text-zinc-100">
-                          {tutor.displayName}
-                        </h3>
-                        {tutor.verified && (
-                          <CheckCircle className="h-5 w-5 shrink-0 text-[#8B5CF6]" />
-                        )}
-                      </div>
-                      <p className="mb-1 text-xs font-black uppercase tracking-[0.2em] text-[#8B5CF6]">
-                        {tutor.subject}
-                      </p>
-                      <p className="mb-4 text-xs font-semibold text-slate-400 dark:text-zinc-500">
-                        {t("find.reviews", { count: tutor.reviews })}
-                      </p>
-
-                      <p className="line-clamp-2 text-sm font-semibold leading-relaxed text-slate-400 dark:text-zinc-500">
-                        {tutor.bio}
-                      </p>
-                    </div>
-
-                    <div className="relative z-10 flex shrink-0 flex-col items-stretch gap-4 sm:w-44 sm:items-end">
-                      <div className="text-left sm:text-right">
-                        <p className="text-3xl font-black text-[#1E293B] dark:text-zinc-100">
-                          {formatTenge(tutorHourlyRateTenge(tutor.defaultHourlyRateCents))}
-                          <span className="ml-1 text-sm font-bold text-slate-400 dark:text-zinc-500">
-                            {t("find.perHour")}
-                          </span>
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!isLoggedIn()) {
-                            router.push("/login")
-                            return
-                          }
-                          router.push(`/tutors/${tutor.id}`)
-                        }}
-                        className="pointer-events-auto rounded-[1.25rem] bg-[#F1F5F9] px-6 py-4 text-sm font-black text-[#1E293B] shadow-sm transition-all hover:bg-[#8B5CF6] hover:text-white active:scale-95 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-[#8B5CF6]"
-                      >
-                        {t("find.bookSession")}
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </div>
+        </Container>
       </div>
+
+      <Container size="search" className="pt-6">
+        <div className="mb-4 flex items-center justify-between lg:hidden">
+          <p className="text-sm font-medium text-[var(--text-muted)]">
+            {t("find.resultsCount", { count: filteredTutors.length })}
+          </p>
+          <Button
+            variant="secondary"
+            className="gap-2 py-2.5"
+            onClick={() => setMobileFiltersOpen(true)}
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            {t("find.filtersTitle")}
+          </Button>
+        </div>
+
+        <div className="flex flex-col items-stretch gap-8 lg:flex-row lg:gap-8">
+          <StickySidebar
+            mode="classic"
+            className="w-full lg:w-[300px]"
+            top={72}
+            inset={96}
+            panelClassName="z-20"
+          >
+            <FilterPanel {...filterProps} />
+          </StickySidebar>
+
+          <div className="min-w-0 flex-1">
+            <div className="mb-6 hidden items-center justify-between gap-4 lg:flex">
+              <p className="text-sm font-medium text-[var(--text-muted)]">
+                {t("find.resultsCount", { count: filteredTutors.length })}
+              </p>
+              <label className="flex items-center gap-3">
+                <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                  {t("find.sortLabel")}
+                </span>
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value as TutorSortOption)}
+                  className="tutora-glass-input cursor-pointer px-4 py-2.5 text-sm font-medium text-[var(--text-primary)] outline-none"
+                >
+                  <option value="recommendation">
+                    {t("find.sort.recommendation")}
+                  </option>
+                  <option value="price_asc">{t("find.sort.priceAsc")}</option>
+                  <option value="price_desc">{t("find.sort.priceDesc")}</option>
+                  <option value="popularity">{t("find.sort.popularity")}</option>
+                  <option value="reviews">{t("find.sort.reviews")}</option>
+                  <option value="rating">{t("find.sort.rating")}</option>
+                </select>
+              </label>
+            </div>
+
+            {tutorsLoading ? (
+              <div className="flex flex-col gap-5" aria-busy="true">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <TutorCardSkeleton key={i} />
+                ))}
+              </div>
+            ) : filteredTutors.length === 0 ? (
+              <div className="rounded-[var(--radius-card)] border-2 border-dashed border-[var(--border)] bg-[var(--surface)] px-8 py-12">
+                <EmptyState
+                  icon={Sparkles}
+                  title={t("find.noResultsTitle")}
+                  description={t("find.noResults")}
+                  action={{ label: t("find.clearFilters"), onClick: clearFilters }}
+                />
+              </div>
+            ) : (
+              <div className="flex flex-col gap-5">
+                {filteredTutors.map((tutor) => (
+                  <TutorCard key={tutor.id} tutor={tutor} />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </Container>
+
+      {mobileFiltersOpen && (
+        <div className="fixed inset-0 z-[100] lg:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            aria-label={t("find.closeFilters")}
+            onClick={() => setMobileFiltersOpen(false)}
+          />
+          <div className="absolute inset-x-0 bottom-0 flex max-h-[88dvh] flex-col rounded-t-[24px] border-t border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]">
+            <div className="flex items-center justify-between border-b border-[var(--border)] p-4">
+              <h3 className="font-bold text-[var(--text-primary)]">
+                {t("find.filtersTitle")}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setMobileFiltersOpen(false)}
+                className="rounded-full p-2 text-[var(--text-muted)] hover:bg-[var(--chip)]"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="min-h-0 overflow-y-auto p-4">
+              <FilterPanel {...filterProps} />
+            </div>
+            <div className="grid grid-cols-2 gap-3 border-t border-[var(--border)] p-4">
+              <Button variant="secondary" onClick={clearFilters}>
+                {t("find.clearFilters")}
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => setMobileFiltersOpen(false)}
+              >
+                {t("find.applyFilters")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

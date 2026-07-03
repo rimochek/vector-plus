@@ -1,14 +1,13 @@
 "use client"
 
-import Link from "next/link"
 import type { ReactNode } from "react"
 import {
   Moon,
   Sun,
-  Navigation as NavIcon,
   Sparkles,
 } from "lucide-react"
 import { LanguageSwitcher } from "@/app/components/language-switcher"
+import { TutoraLogo } from "@/app/components/ui/tutora-logo"
 import { useStoredTheme } from "@/lib/use-stored-theme"
 import { useTranslations } from "@/lib/i18n/locale-context"
 
@@ -52,7 +51,7 @@ function StepIndicator({
             <div
               className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-black transition-all ${
                 step.status === "complete"
-                  ? "bg-white text-[#8B5CF6] shadow-lg shadow-black/10"
+                  ? "bg-white text-[var(--primary-from)] shadow-lg shadow-black/10"
                   : step.status === "current"
                     ? "bg-white/20 text-white ring-2 ring-white/40 backdrop-blur-sm"
                     : "bg-white/10 text-white/50"
@@ -114,9 +113,9 @@ export function AuthWizardLayout({
   const { t } = useTranslations()
 
   return (
-    <div className="auth-wizard-root h-dvh max-h-dvh overflow-hidden bg-[#F8FAFC] text-[#1E293B] dark:bg-zinc-950 dark:text-zinc-100">
+    <div className="auth-wizard-root h-dvh max-h-dvh overflow-hidden bg-[#F8FAFC] text-[var(--text-primary)] dark:bg-[var(--bg)] dark:text-[var(--text-primary)]">
       <div className="grid h-full lg:grid-cols-[380px_1fr] xl:grid-cols-[420px_1fr]">
-        <aside className="relative hidden h-full overflow-hidden bg-gradient-to-br from-[#8B5CF6] via-[#7C3AED] to-[#6366F1] lg:flex lg:flex-col">
+        <aside className="relative hidden h-full overflow-hidden bg-gradient-to-br from-[var(--primary-from)] via-[#7C3AED] to-[var(--primary-to)] lg:flex lg:flex-col">
           <div className="pointer-events-none absolute inset-0 opacity-30">
             <div className="absolute -left-20 top-20 h-72 w-72 rounded-full bg-white/20 blur-3xl" />
             <div className="absolute bottom-0 right-0 h-96 w-96 rounded-full bg-indigo-300/20 blur-3xl" />
@@ -131,14 +130,9 @@ export function AuthWizardLayout({
           </div>
 
           <div className="relative flex h-full flex-col overflow-hidden p-8 xl:p-10">
-            <Link href="/" className="mb-5 inline-flex shrink-0 items-center gap-3 group">
-              <div className="rounded-2xl bg-white/15 p-2.5 ring-1 ring-white/20 backdrop-blur-sm transition-transform group-hover:rotate-6">
-                <NavIcon className="h-5 w-5 text-white" />
-              </div>
-              <span className="text-xl font-black tracking-tight text-white xl:text-2xl">
-                Vector<span className="text-violet-200">+</span>
-              </span>
-            </Link>
+            <div className="mb-5 shrink-0">
+              <TutoraLogo href="/" size="sm" />
+            </div>
 
             <div className="mb-4 inline-flex w-fit shrink-0 items-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-3.5 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-violet-100 backdrop-blur-sm">
               <Sparkles className="h-3.5 w-3.5" />
@@ -202,15 +196,10 @@ export function AuthWizardLayout({
             <div className="absolute bottom-0 left-0 h-72 w-72 rounded-full bg-indigo-100/40 blur-[90px]" />
           </div>
 
-          <header className="relative z-10 flex shrink-0 items-center justify-between gap-4 border-b border-slate-200/70 bg-white/70 px-5 py-3 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-950/70 sm:px-8">
-            <Link href="/" className="flex items-center gap-2.5 lg:hidden">
-              <div className="rounded-xl bg-[#8B5CF6] p-2 shadow-md shadow-violet-300/30">
-                <NavIcon className="h-5 w-5 text-white" />
-              </div>
-              <span className="text-lg font-black">
-                Vector<span className="text-[#8B5CF6]">+</span>
-              </span>
-            </Link>
+          <header className="relative z-10 flex shrink-0 items-center justify-between gap-4 border-b border-slate-200/70 bg-white/70 px-5 py-3 backdrop-blur-xl dark:border-[var(--border)] dark:bg-[var(--bg)] sm:px-8">
+            <div className="lg:hidden">
+              <TutoraLogo href="/" size="sm" />
+            </div>
 
             {mode === "register" && currentStep && totalSteps && (
               <div className="flex flex-1 items-center justify-center gap-2 lg:hidden">
@@ -223,7 +212,7 @@ export function AuthWizardLayout({
                       key={stepNum}
                       className={`h-2 rounded-full transition-all duration-300 ${
                         active
-                          ? "w-8 bg-[#8B5CF6]"
+                          ? "w-8 bg-[var(--primary-from)]"
                           : done
                             ? "w-2 bg-violet-300 dark:bg-violet-700"
                             : "w-2 bg-slate-200 dark:bg-zinc-700"
@@ -242,7 +231,7 @@ export function AuthWizardLayout({
                 aria-label={
                   darkMode ? t("theme.lightAria") : t("theme.darkAria")
                 }
-                className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600 shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600 shadow-sm dark:border-[var(--border)] dark:bg-[var(--surface)] dark:text-zinc-300"
               >
                 {darkMode ? (
                   <Sun className="h-4 w-4" />
@@ -255,15 +244,15 @@ export function AuthWizardLayout({
 
           <main className="relative z-10 flex min-h-0 flex-1 flex-col justify-center overflow-y-auto overscroll-contain px-5 py-6 sm:px-8 lg:px-10 lg:py-8 xl:px-12">
             <div className="mx-auto my-auto w-full max-w-2xl">
-              <div className="rounded-[1.75rem] border border-slate-200/80 bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.08)] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none sm:rounded-[2rem] sm:p-6 lg:p-7">
+              <div className="rounded-[1.75rem] border border-slate-200/80 bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.08)] dark:border-[var(--border)] dark:bg-[var(--surface)] dark:shadow-none sm:rounded-[2rem] sm:p-6 lg:p-7">
                 <div className="max-h-[min(720px,calc(100dvh-12rem))] overflow-y-auto overscroll-contain">
                   {children}
                 </div>
-                {nav && <div className="mt-5 border-t border-slate-100 pt-4 dark:border-zinc-800">{nav}</div>}
+                {nav && <div className="mt-5 border-t border-slate-100 pt-4 dark:border-[var(--border)]">{nav}</div>}
               </div>
 
               {footer && (
-                <div className="mt-3 py-1 text-center text-sm font-semibold text-slate-500 dark:text-zinc-400">
+                <div className="mt-3 py-1 text-center text-sm font-semibold text-slate-500 dark:text-[var(--text-muted)]">
                   {footer}
                 </div>
               )}
@@ -287,14 +276,14 @@ export function WizardStepHeader({
   return (
     <div className="mb-4">
       {eyebrow && (
-        <span className="mb-2 inline-flex rounded-full border border-violet-100 bg-violet-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#8B5CF6] dark:border-violet-900/50 dark:bg-violet-950/40">
+        <span className="mb-2 inline-flex rounded-full border border-violet-100 bg-violet-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-[var(--primary-from)] dark:border-violet-900/50 dark:bg-violet-950/40">
           {eyebrow}
         </span>
       )}
-      <h2 className="text-2xl font-black tracking-tight text-[#1E293B] dark:text-zinc-50 sm:text-[1.75rem] xl:text-3xl">
+      <h2 className="text-2xl font-black tracking-tight text-[var(--text-primary)] dark:text-[var(--text-primary)] sm:text-[1.75rem] xl:text-3xl">
         {title}
       </h2>
-      <p className="mt-1.5 max-w-xl text-sm font-semibold leading-snug text-slate-500 dark:text-zinc-400">
+      <p className="mt-1.5 max-w-xl text-sm font-semibold leading-snug text-slate-500 dark:text-[var(--text-muted)]">
         {subtitle}
       </p>
     </div>
@@ -322,7 +311,7 @@ export function WizardNav({
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center justify-center rounded-2xl border-2 border-slate-200 bg-white px-5 py-3.5 text-sm font-black uppercase tracking-widest text-slate-600 transition hover:bg-slate-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 lg:px-6 lg:py-3"
+          className="inline-flex items-center justify-center rounded-2xl border-2 border-slate-200 bg-white px-5 py-3.5 text-sm font-black uppercase tracking-widest text-slate-600 transition hover:bg-slate-50 dark:border-[var(--border)] dark:bg-[var(--surface)] dark:text-zinc-300 dark:hover:bg-[var(--chip)] lg:px-6 lg:py-3"
         >
           {backLabel}
         </button>
@@ -333,7 +322,7 @@ export function WizardNav({
         type="button"
         onClick={onNext}
         disabled={!canNext}
-        className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#8B5CF6] to-[#6366F1] px-5 py-3.5 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-violet-300/30 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-violet-400/30 disabled:translate-y-0 disabled:opacity-40 disabled:shadow-none dark:shadow-violet-950/40 lg:px-6 lg:py-3"
+        className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[var(--primary-from)] to-[var(--primary-to)] px-5 py-3.5 text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-violet-300/30 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-violet-400/30 disabled:translate-y-0 disabled:opacity-40 disabled:shadow-none dark:shadow-violet-950/40 lg:px-6 lg:py-3"
       >
         {nextLabel}
       </button>
@@ -343,7 +332,7 @@ export function WizardNav({
 
 export function WizardFieldLabel({ children }: { children: ReactNode }) {
   return (
-    <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.16em] text-slate-400 dark:text-zinc-500">
+    <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.16em] text-[var(--text-muted)]">
       {children}
     </span>
   )
@@ -356,7 +345,7 @@ export function WizardInput({
   return (
     <input
       {...props}
-      className={`w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-base font-medium text-[#1E293B] outline-none transition placeholder:text-slate-400 focus:border-[#8B5CF6] focus:bg-white focus:ring-4 focus:ring-violet-100 dark:border-zinc-700 dark:bg-zinc-950/80 dark:text-zinc-100 dark:placeholder:text-zinc-600 dark:focus:border-violet-500 dark:focus:bg-zinc-950 dark:focus:ring-violet-950/40 ${className}`}
+      className={`w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-base font-medium text-[var(--text-primary)] outline-none transition placeholder:text-slate-400 focus:border-[var(--primary-from)] focus:bg-white focus:ring-4 focus:ring-violet-100 dark:border-[var(--border)] dark:bg-[var(--bg)] dark:text-[var(--text-primary)] dark:placeholder:text-zinc-600 dark:focus:border-violet-500 dark:focus:bg-zinc-950 dark:focus:ring-violet-950/40 ${className}`}
     />
   )
 }
@@ -369,7 +358,7 @@ export function WizardSelect({
   return (
     <select
       {...props}
-      className={`w-full cursor-pointer rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-base font-medium text-[#1E293B] outline-none transition focus:border-[#8B5CF6] focus:bg-white focus:ring-4 focus:ring-violet-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950/80 dark:text-zinc-100 dark:focus:border-violet-500 dark:focus:bg-zinc-950 dark:focus:ring-violet-950/40 ${className}`}
+      className={`w-full cursor-pointer rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-base font-medium text-[var(--text-primary)] outline-none transition focus:border-[var(--primary-from)] focus:bg-white focus:ring-4 focus:ring-violet-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-[var(--border)] dark:bg-[var(--bg)] dark:text-[var(--text-primary)] dark:focus:border-violet-500 dark:focus:bg-zinc-950 dark:focus:ring-violet-950/40 ${className}`}
     >
       {children}
     </select>
@@ -383,7 +372,7 @@ export function WizardTextarea({
   return (
     <textarea
       {...props}
-      className={`w-full resize-none rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-base font-medium text-[#1E293B] outline-none transition placeholder:text-slate-400 focus:border-[#8B5CF6] focus:bg-white focus:ring-4 focus:ring-violet-100 dark:border-zinc-700 dark:bg-zinc-950/80 dark:text-zinc-100 dark:placeholder:text-zinc-600 dark:focus:border-violet-500 dark:focus:bg-zinc-950 dark:focus:ring-violet-950/40 ${className}`}
+      className={`w-full resize-none rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-base font-medium text-[var(--text-primary)] outline-none transition placeholder:text-slate-400 focus:border-[var(--primary-from)] focus:bg-white focus:ring-4 focus:ring-violet-100 dark:border-[var(--border)] dark:bg-[var(--bg)] dark:text-[var(--text-primary)] dark:placeholder:text-zinc-600 dark:focus:border-violet-500 dark:focus:bg-zinc-950 dark:focus:ring-violet-950/40 ${className}`}
     />
   )
 }
@@ -405,12 +394,12 @@ export function WizardChoice({
       onClick={onClick}
       className={`group relative w-full overflow-hidden rounded-2xl border px-4 py-4 text-left text-lg font-bold transition-all sm:px-5 sm:py-4 sm:text-xl lg:py-3.5 lg:text-lg xl:py-4 xl:text-xl ${
         selected
-          ? "border-[#8B5CF6] bg-violet-50 text-[#7C3AED] dark:border-violet-500 dark:bg-violet-950/30 dark:text-violet-200"
-          : "border-slate-200 bg-white text-slate-700 hover:border-violet-200 hover:bg-violet-50/40 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-violet-800 dark:hover:bg-violet-950/20"
+          ? "border-[var(--primary-from)] bg-violet-50 text-[#7C3AED] dark:border-violet-500 dark:bg-violet-950/30 dark:text-violet-200"
+          : "border-slate-200 bg-white text-slate-700 hover:border-violet-200 hover:bg-violet-50/40 dark:border-[var(--border)] dark:bg-[var(--surface)] dark:text-zinc-200 dark:hover:border-violet-800 dark:hover:bg-violet-950/20"
       } ${className}`}
     >
       {selected && (
-        <span className="absolute right-4 top-4 flex h-6 w-6 items-center justify-center rounded-full bg-[#8B5CF6] text-xs text-white">
+        <span className="absolute right-4 top-4 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--primary-from)] text-xs text-white">
           ✓
         </span>
       )}
@@ -438,14 +427,14 @@ export function WizardRoleCard({
       onClick={onClick}
       className={`group relative flex w-full items-start gap-4 overflow-hidden rounded-[1.5rem] border-2 p-5 text-left transition-all lg:p-5 xl:p-6 ${
         selected
-          ? "border-[#8B5CF6] bg-violet-50 dark:border-violet-500 dark:bg-violet-950/30"
-          : "border-slate-200 bg-white hover:border-violet-200 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-violet-800"
+          ? "border-[var(--primary-from)] bg-violet-50 dark:border-violet-500 dark:bg-violet-950/30"
+          : "border-slate-200 bg-white hover:border-violet-200 dark:border-[var(--border)] dark:bg-[var(--surface)] dark:hover:border-violet-800"
       }`}
     >
       <div
         className={`rounded-[1.1rem] p-3 transition-transform group-hover:scale-105 lg:p-3.5 ${
           selected
-            ? "bg-[#8B5CF6] text-white"
+            ? "bg-[var(--primary-from)] text-white"
             : "bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300"
         }`}
       >
@@ -453,12 +442,12 @@ export function WizardRoleCard({
       </div>
       <div className="min-w-0 flex-1 pr-8">
         <span className="block text-lg font-black sm:text-xl lg:text-xl">{title}</span>
-        <span className="mt-1.5 block text-sm font-semibold leading-snug text-slate-500 dark:text-zinc-400 lg:text-sm">
+        <span className="mt-1.5 block text-sm font-semibold leading-snug text-slate-500 dark:text-[var(--text-muted)] lg:text-sm">
           {description}
         </span>
       </div>
       {selected && (
-        <span className="absolute right-5 top-5 flex h-7 w-7 items-center justify-center rounded-full bg-[#8B5CF6] text-sm text-white">
+        <span className="absolute right-5 top-5 flex h-7 w-7 items-center justify-center rounded-full bg-[var(--primary-from)] text-sm text-white">
           ✓
         </span>
       )}
@@ -481,8 +470,8 @@ export function WizardTag({
       onClick={onClick}
       className={`rounded-full px-4 py-2.5 text-sm font-black transition-all ${
         selected
-          ? "bg-[#8B5CF6] text-white shadow-md shadow-violet-300/30 dark:shadow-violet-950/40"
-          : "border border-slate-200 bg-white text-slate-600 hover:border-violet-200 hover:text-[#8B5CF6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-violet-800"
+          ? "bg-[var(--primary-from)] text-white shadow-md shadow-violet-300/30 dark:shadow-violet-950/40"
+          : "border border-slate-200 bg-white text-slate-600 hover:border-violet-200 hover:text-[var(--primary-from)] dark:border-[var(--border)] dark:bg-[var(--surface)] dark:text-zinc-300 dark:hover:border-violet-800"
       }`}
     >
       {children}

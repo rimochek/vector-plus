@@ -31,6 +31,14 @@ enum VerificationStatus {
   REJECTED
 }
 
+enum TutorApplicationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
 enum LessonStatus {
   PENDING_APPROVAL
   PENDING_PAYMENT
@@ -106,6 +114,28 @@ enum AvailabilityRuleType {
   BLOCKED
 }
 
+enum AuthProvider {
+  GOOGLE
+  PASSWORD
+}
+
+enum AvatarSource {
+  GOOGLE
+  UPLOAD
+  DEFAULT
+}
+
+enum StorageUploadKind {
+  AVATAR
+  VERIFICATION
+}
+
+enum StorageUploadStatus {
+  PENDING
+  COMPLETED
+  EXPIRED
+}
+
 enum CurrencyCode {
   USD
   EUR
@@ -121,7 +151,7 @@ enum CurrencyCode {
 model User {
   id              String        @id @default(uuid())
   email           String        @unique
-  passwordHash    String
+  passwordHash    String?
   emailVerifiedAt DateTime?
   accountStatus   AccountStatus @default(PENDING_VERIFICATION)
   timezone        String        @default("UTC")
@@ -129,20 +159,59 @@ model User {
   lastLoginAt     DateTime?
   deletedAt       DateTime?
 
-  roles           UserRoleMap[]
+  roles UserRoleMap[]
 
-  studentProfile  StudentProfile?
-  tutorProfile    TutorProfile?
+  studentProfile StudentProfile?
+  tutorProfile   TutorProfile?
 
-  messages        Message[]
-  notifications   Notification[]
-  auditLogs       AuditLog[]
-  payments        Payment[]
+  authIdentities AuthIdentity[]
+  storageUploads StorageUpload[]
+
+  messages                 Message[]
+  notifications            Notification[]
+  auditLogs                AuditLog[]
+  payments                 Payment[]
   conversationParticipants ConversationParticipant[]
-  refreshTokens       RefreshToken[]
+  refreshTokens            RefreshToken[]
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuthIdentity {
+  id                String       @id @default(uuid())
+  provider          AuthProvider
+  providerAccountId String
+  providerEmail     String?
+  userId            String
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model StorageUpload {
+  id               String              @id @default(uuid())
+  userId           String
+  kind             StorageUploadKind
+  status           StorageUploadStatus @default(PENDING)
+  objectKey        String
+  bucket           String
+  mimeType         String
+  maxSizeBytes     Int
+  originalFileName String?
+  expiresAt        DateTime
+  completedAt      DateTime?
+  metadata         Json?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, status])
+  @@index([expiresAt])
 }
 
 model UserRoleMap {
@@ -173,23 +242,31 @@ model RefreshToken {
 //
 
 model StudentProfile {
-  id            String @id @default(uuid())
-  userId        String @unique
+  id            String  @id @default(uuid())
+  userId        String  @unique
   displayName   String
   avatarUrl     String?
+  avatarObjectKey String?
+  avatarSource  AvatarSource @default(DEFAULT)
+  avatarMimeType String?
+  avatarSizeBytes Int?
   bio           String?
   learningGoals String?
 
-  budgetMinCents Int?
-  budgetMaxCents Int?
-  budgetCurrency CurrencyCode @default(USD)
+  budgetMinCents         Int?
+  budgetMaxCents         Int?
+  budgetCurrency         CurrencyCode @default(USD)
   preferredTutorAgeRange String?
+  onboardingCompleted    Boolean      @default(false)
+  preferredLessonFormat  String?
+  preferredTimes         String?
+  learningLevel          String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  lessons Lesson[]
-  reviews Review[]
-  favorites StudentFavorite[]
+  lessons       Lesson[]
+  reviews       Review[]
+  favorites     StudentFavorite[]
   conversations Conversation[]
 
   createdAt DateTime @default(now())
@@ -201,49 +278,99 @@ model StudentProfile {
 //
 
 model TutorProfile {
-  id          String @id @default(uuid())
-  userId      String @unique
+  id     String @id @default(uuid())
+  userId String @unique
 
-  displayName String
-  headline    String?
-  bio         String
-  avatarUrl   String?
+  displayName   String
+  headline      String?
+  bio           String
+  avatarUrl     String?
+  avatarObjectKey String?
+  avatarSource  AvatarSource @default(DEFAULT)
+  avatarMimeType String?
+  avatarSizeBytes Int?
   videoIntroUrl String?
 
+  verificationDocuments VerificationDocument[]
+
   verificationStatus VerificationStatus @default(UNVERIFIED)
+  applicationStatus  TutorApplicationStatus @default(DRAFT)
+  applicationRejectionReason String?
+  applicationSubmittedAt     DateTime?
+  applicationReviewedAt      DateTime?
+  applicationReviewedByUserId String?
 
   defaultHourlyRateCents Int
-  defaultCurrency CurrencyCode @default(USD)
+  defaultCurrency        CurrencyCode @default(USD)
 
   minLessonMinutes Int @default(60)
   maxLessonMinutes Int @default(120)
 
-  ratingAvg     Float @default(0)
-  ratingCount   Int   @default(0)
-  lessonsCompleted Int @default(0)
+  ratingAvg        Float @default(0)
+  ratingCount      Int   @default(0)
+  lessonsCompleted Int   @default(0)
 
   isAcceptingStudents Boolean @default(true)
 
-  experienceYears Int?
-  education       String?
-  country         String?
-  city            String?
+  experienceYears          Int?
+  education                String?
+  country                  String?
+  city                     String?
   preferredStudentAgeRange String?
 
   searchDocument String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  subjects TutorSubject[]
+  subjects          TutorSubject[]
   availabilityRules TutorAvailabilityRule[]
   availabilitySlots AvailabilitySlot[]
-  lessons Lesson[]
-  reviews Review[]
-  favoritedBy StudentFavorite[]
-  conversations Conversation[]
+  lessons           Lesson[]
+  reviews           Review[]
+  favoritedBy       StudentFavorite[]
+  conversations     Conversation[]
+  profileViews      TutorProfileView[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model VerificationDocument {
+  id               String             @id @default(uuid())
+  tutorProfileId   String
+  objectKey        String
+  originalFileName String
+  displayFileName  String
+  mimeType         String
+  sizeBytes        Int
+  documentType     String
+  metadata         Json?
+  status           VerificationStatus @default(PENDING)
+  uploadedAt       DateTime           @default(now())
+  reviewedAt       DateTime?
+  reviewerUserId   String?
+  rejectionReason  String?
+
+  tutorProfile TutorProfile @relation(fields: [tutorProfileId], references: [id], onDelete: Cascade)
+
+  @@index([tutorProfileId])
+  @@index([status])
+}
+
+model TutorProfileView {
+  id             String  @id @default(uuid())
+  tutorProfileId String
+  viewerUserId   String?
+  ipHash         String?
+  userAgentHash  String?
+
+  tutorProfile TutorProfile @relation(fields: [tutorProfileId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([tutorProfileId, createdAt])
+  @@index([viewerUserId, createdAt])
+  @@index([ipHash, createdAt])
 }
 
 //
@@ -251,10 +378,10 @@ model TutorProfile {
 //
 
 model SubjectCategory {
-  id        String @id @default(uuid())
-  slug      String @unique
+  id        String  @id @default(uuid())
+  slug      String  @unique
   name      String
-  sortOrder Int @default(0)
+  sortOrder Int     @default(0)
   parentId  String?
 
   subjects Subject[]
@@ -264,13 +391,13 @@ model SubjectCategory {
 }
 
 model Subject {
-  id          String @id @default(uuid())
+  id          String  @id @default(uuid())
   categoryId  String
-  slug        String @unique
+  slug        String  @unique
   name        String
   description String?
   isActive    Boolean @default(true)
-  sortOrder   Int @default(0)
+  sortOrder   Int     @default(0)
 
   category SubjectCategory @relation(fields: [categoryId], references: [id])
 
@@ -282,16 +409,16 @@ model Subject {
 }
 
 model TutorSubject {
-  id              String @id @default(uuid())
+  id             String @id @default(uuid())
   tutorProfileId String
   subjectId      String
 
   hourlyRateCents Int
   currency        CurrencyCode
 
-  experienceYears Int?
+  experienceYears  Int?
   proficiencyLevel Int?
-  isPrimary       Boolean @default(false)
+  isPrimary        Boolean @default(false)
 
   tutorProfile TutorProfile @relation(fields: [tutorProfileId], references: [id], onDelete: Cascade)
   subject      Subject      @relation(fields: [subjectId], references: [id])
@@ -304,22 +431,22 @@ model TutorSubject {
 //
 
 model TutorAvailabilityRule {
-  id              String @id @default(uuid())
-  tutorProfileId  String
+  id             String @id @default(uuid())
+  tutorProfileId String
 
-  ruleType        AvailabilityRuleType
-  timezone        String
+  ruleType AvailabilityRuleType
+  timezone String
 
-  dayOfWeek       Int?
-  startTime       String?
-  endTime         String?
+  dayOfWeek Int?
+  startTime String?
+  endTime   String?
 
-  startsAt        DateTime?
-  endsAt          DateTime?
+  startsAt DateTime?
+  endsAt   DateTime?
 
-  isActive        Boolean @default(true)
+  isActive Boolean @default(true)
 
-  tutorProfile TutorProfile @relation(fields: [tutorProfileId], references: [id], onDelete: Cascade)
+  tutorProfile TutorProfile       @relation(fields: [tutorProfileId], references: [id], onDelete: Cascade)
   slots        AvailabilitySlot[]
 
   createdAt DateTime @default(now())
@@ -327,7 +454,7 @@ model TutorAvailabilityRule {
 }
 
 model AvailabilitySlot {
-  id             String   @id @default(uuid())
+  id             String  @id @default(uuid())
   tutorProfileId String
   ruleId         String?
 
@@ -335,8 +462,8 @@ model AvailabilitySlot {
   endsAt      DateTime
   isAvailable Boolean  @default(true)
 
-  tutorProfile TutorProfile            @relation(fields: [tutorProfileId], references: [id], onDelete: Cascade)
-  rule         TutorAvailabilityRule?  @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  tutorProfile TutorProfile           @relation(fields: [tutorProfileId], references: [id], onDelete: Cascade)
+  rule         TutorAvailabilityRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
   lesson       Lesson?
 
   createdAt DateTime @default(now())
@@ -413,7 +540,7 @@ model Lesson {
 model Payment {
   id String @id @default(uuid())
 
-  lessonId String @unique
+  lessonId    String @unique
   payerUserId String
 
   provider PaymentProvider
@@ -444,11 +571,11 @@ model Review {
   studentProfileId String
   authorUserId     String
 
-  rating Int
+  rating  Int
   comment String?
 
-  lesson Lesson @relation(fields: [lessonId], references: [id])
-  tutorProfile TutorProfile @relation(fields: [tutorProfileId], references: [id])
+  lesson         Lesson         @relation(fields: [lessonId], references: [id])
+  tutorProfile   TutorProfile   @relation(fields: [tutorProfileId], references: [id])
   studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id])
 
   createdAt DateTime @default(now())
@@ -495,12 +622,12 @@ model Message {
   id String @id @default(uuid())
 
   conversationId String
-  senderId String
+  senderId       String
 
   body String
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender User @relation(fields: [senderId], references: [id])
+  sender       User         @relation(fields: [senderId], references: [id])
 
   createdAt DateTime @default(now())
 }
@@ -517,10 +644,10 @@ model Notification {
   channel NotificationChannel
   status  NotificationStatus
 
-  type String
-  title String
-  body  String?
-  data  Json?
+  type   String
+  title  String
+  body   String?
+  data   Json?
   readAt DateTime?
 
   user User @relation(fields: [userId], references: [id])
@@ -537,9 +664,9 @@ model AuditLog {
 
   actorUserId String?
 
-  action String
+  action     String
   entityType String
-  entityId String?
+  entityId   String?
 
   oldValues Json?
   newValues Json?

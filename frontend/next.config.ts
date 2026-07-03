@@ -1,7 +1,10 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from "next"
+import { loadEnvConfig } from "@next/env"
+import path from "path"
 
-const nextConfig: NextConfig = {
-  /* config options here */
-};
+// Load env from project root (.env), not frontend/.env.local
+loadEnvConfig(path.resolve(__dirname, ".."))
 
-export default nextConfig;
+const nextConfig: NextConfig = {}
+
+export default nextConfig

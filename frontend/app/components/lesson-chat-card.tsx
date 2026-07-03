@@ -44,17 +44,17 @@ export function LessonChatCard({
             ? "border-red-200 bg-red-50/80 dark:border-red-900/40 dark:bg-red-950/20"
             : isPending
               ? "border-amber-200 bg-amber-50/80 dark:border-amber-900/40 dark:bg-amber-950/20"
-              : "border-violet-100 bg-white dark:border-violet-900/30 dark:bg-zinc-900"
+              : "border-violet-100 bg-white dark:border-violet-900/30 dark:bg-[var(--surface)]"
         }`}
       >
         <div className="mb-3 flex items-center gap-2">
-          <Calendar className="h-4 w-4 text-[#8B5CF6]" />
-          <p className="text-xs font-black uppercase tracking-widest text-[#8B5CF6]">
+          <Calendar className="h-4 w-4 text-[var(--primary-from)]" />
+          <p className="text-xs font-black uppercase tracking-widest text-[var(--primary-from)]">
             {t("chat.lessonCard.title")}
           </p>
         </div>
 
-        <p className="text-sm font-black text-[#1E293B] dark:text-zinc-100">
+        <p className="text-sm font-black text-[var(--text-primary)] dark:text-[var(--text-primary)]">
           {formatWhen(lesson.scheduledStartAt, locale)}
         </p>
 
@@ -89,12 +89,12 @@ export function LessonChatCard({
                 </p>
               )}
               {lesson.studentPreferences.learningGoals && (
-                <p className="mt-1 text-sm text-slate-500 dark:text-zinc-400">
+                <p className="mt-1 text-sm text-slate-500 dark:text-[var(--text-muted)]">
                   {lesson.studentPreferences.learningGoals}
                 </p>
               )}
               {lesson.studentPreferences.topics.length > 0 && (
-                <p className="mt-1 text-xs font-semibold text-[#8B5CF6]">
+                <p className="mt-1 text-xs font-semibold text-[var(--primary-from)]">
                   {t("chat.lessonCard.topics")}: {lesson.studentPreferences.topics.join(", ")}
                 </p>
               )}
@@ -118,7 +118,7 @@ export function LessonChatCard({
             <button
               type="button"
               onClick={() => onApprove(lesson.id)}
-              className="flex-1 rounded-2xl bg-[#8B5CF6] py-2.5 text-xs font-black uppercase tracking-widest text-white transition hover:bg-[#7C3AED]"
+              className="flex-1 rounded-2xl bg-[var(--primary-from)] py-2.5 text-xs font-black uppercase tracking-widest text-white transition hover:bg-[#7C3AED]"
             >
               {t("chat.lessonCard.approve")}
             </button>

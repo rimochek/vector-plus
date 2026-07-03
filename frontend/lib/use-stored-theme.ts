@@ -9,6 +9,7 @@ export function useStoredTheme() {
     const stored = localStorage.getItem("vector-theme")
     const isDark = stored === "dark"
     document.documentElement.classList.toggle("dark", isDark)
+    document.documentElement.classList.toggle("light", !isDark)
     const id = requestAnimationFrame(() => {
       setDarkMode(isDark)
     })
@@ -19,6 +20,7 @@ export function useStoredTheme() {
     setDarkMode((prev) => {
       const next = !prev
       document.documentElement.classList.toggle("dark", next)
+      document.documentElement.classList.toggle("light", !next)
       localStorage.setItem("vector-theme", next ? "dark" : "light")
       return next
     })

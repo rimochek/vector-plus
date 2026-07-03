@@ -1,21 +1,22 @@
 import type { Metadata } from "next"
-import { Geist, Geist_Mono } from "next/font/google"
+import { Inter } from "next/font/google"
 import "./globals.css"
 import { Providers } from "./providers"
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
-})
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  display: "swap",
 })
 
 export const metadata: Metadata = {
-  title: "Vector+",
-  description: "Find your perfect tutor",
+  title: "Tutora — Find your perfect tutor",
+  description:
+    "Modern tutoring marketplace. Find verified tutors, book lessons, and learn with confidence.",
+  icons: {
+    icon: "/tutora-logo.svg",
+    apple: "/tutora-logo.png",
+  },
 }
 
 export default function RootLayout({
@@ -27,9 +28,9 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} h-full max-w-[100vw] overflow-x-hidden antialiased`}
+      className={`${inter.variable} light h-full max-w-[100vw] antialiased`}
     >
-      <body className="flex min-h-full max-w-[100vw] flex-col overflow-x-hidden">
+      <body className="flex min-h-full max-w-[100vw] flex-col bg-[var(--bg)] text-[var(--text-primary)]">
         <Providers>{children}</Providers>
       </body>
     </html>

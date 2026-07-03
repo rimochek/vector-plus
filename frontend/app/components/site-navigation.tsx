@@ -5,18 +5,13 @@ import { createPortal } from "react-dom"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
-  Bell,
-  Calendar,
-  Heart,
   Languages,
   LogOut,
   Menu,
   MessageSquare,
   Moon,
   Sun,
-  User,
   X,
-  Navigation as NavIcon,
 } from "lucide-react"
 import { useStoredTheme } from "@/lib/use-stored-theme"
 import { useTranslations } from "@/lib/i18n/locale-context"
@@ -24,90 +19,36 @@ import { useAuthSession } from "@/lib/use-auth-session"
 import {
   DEFAULT_AUTH_ROUTE,
   dashboardTabHref,
-  getUserDisplayName,
-  getUserInitials,
   logout,
 } from "@/lib/auth-client"
 import { NotificationMenu } from "@/app/components/notification-menu"
 import { ProfileMenu } from "@/app/components/profile-menu"
+import { TutoraLogo } from "@/app/components/ui/tutora-logo"
+import { Container } from "@/app/components/ui/container"
 
 function NavIconButton({
-  onClick,
   href,
   label,
-  badge,
   children,
 }: {
-  onClick?: () => void
   href?: string
   label: string
-  badge?: boolean
   children: ReactNode
 }) {
   const className =
-    "relative rounded-2xl border border-slate-200 bg-slate-50 p-2.5 text-slate-600 transition hover:bg-slate-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-
-  const content = (
-    <>
-      {children}
-      {badge && (
-        <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#8B5CF6] ring-2 ring-white dark:ring-zinc-950" />
-      )}
-    </>
-  )
+    "relative flex h-10 w-10 items-center justify-center rounded-[var(--radius-button)] border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] transition duration-150 ease-in-out hover:bg-[var(--chip)] hover:text-[var(--text-primary)]"
 
   if (href) {
     return (
       <Link href={href} aria-label={label} className={className}>
-        {content}
+        {children}
       </Link>
     )
   }
 
   return (
-    <button type="button" onClick={onClick} aria-label={label} className={className}>
-      {content}
-    </button>
-  )
-}
-
-function MobileMenuLink({
-  href,
-  onClick,
-  active,
-  icon: Icon,
-  children,
-}: {
-  href?: string
-  onClick?: () => void
-  active?: boolean
-  icon?: React.ComponentType<{ className?: string }>
-  children: ReactNode
-}) {
-  const className = `flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left text-sm font-bold transition ${
-    active
-      ? "bg-violet-50 text-[#8B5CF6] dark:bg-violet-950/40 dark:text-violet-300"
-      : "text-slate-700 hover:bg-slate-50 dark:text-zinc-200 dark:hover:bg-zinc-800/80"
-  }`
-
-  const inner = (
-    <>
-      {Icon && <Icon className="h-5 w-5 shrink-0 opacity-80" />}
-      <span className="flex-1">{children}</span>
-    </>
-  )
-
-  if (href) {
-    return (
-      <Link href={href} onClick={onClick} className={className}>
-        {inner}
-      </Link>
-    )
-  }
-
-  return (
-    <button type="button" onClick={onClick} className={className}>
-      {inner}
+    <button type="button" aria-label={label} className={className}>
+      {children}
     </button>
   )
 }
@@ -122,29 +63,26 @@ export const Navigation = () => {
   const { user, isLoggedIn, ready } = useAuthSession()
 
   const closeMenu = () => setIsOpen(false)
-
   const isTutor = (user?.role ?? user?.roles?.[0]) === "tutor"
   const conversationsHref = dashboardTabHref("chats", user)
   const notificationsHref = dashboardTabHref("notifications", user)
-  const favoritesHref = dashboardTabHref("favorites", user)
-  const homeHref = isTutor ? "/tutor-dashboard" : "/dashboard"
 
-  const navItems: { href: string; label: string }[] = isTutor
-    ? [
-        { href: "/tutors", label: t("nav.findTutors") },
-        { href: "/tutor-dashboard", label: t("nav.tutorDashboard") },
-      ]
-    : [
-        { href: "/tutors", label: t("nav.findTutors") },
-        { href: "/dashboard", label: t("nav.dashboard") },
-      ]
+  const centerNav = isLoggedIn
+    ? isTutor
+      ? [
+          { href: "/tutors", label: t("nav.findTutors") },
+          { href: "/tutor-dashboard", label: t("nav.tutorDashboard") },
+        ]
+      : [
+          { href: "/tutors", label: t("nav.findTutors") },
+          { href: "/dashboard", label: t("nav.dashboard") },
+        ]
+    : [{ href: "/tutors", label: t("nav.findTutors") }]
 
   const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href)
+    href === "/" ? pathname === "/" : pathname.startsWith(href.split("?")[0])
 
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+  useEffect(() => setMounted(true), [])
 
   useEffect(() => {
     if (!isOpen) return
@@ -164,298 +102,160 @@ export const Navigation = () => {
     void logout().then(() => router.push("/login"))
   }
 
-  const authActions = ready && isLoggedIn && (
-    <>
-      {!isTutor && (
-        <NavIconButton href={favoritesHref} label={t("nav.favorites")}>
-          <Heart className="h-5 w-5" />
-        </NavIconButton>
-      )}
+  const logoHref = isLoggedIn ? DEFAULT_AUTH_ROUTE : "/"
 
-      <NotificationMenu notificationsHref={notificationsHref} />
+  return (
+    <header
+      className={`sticky top-0 z-50 border-b border-[var(--header-border)] bg-[var(--header-bg)] shadow-sm backdrop-blur supports-[backdrop-filter]:bg-[var(--header-bg)] ${
+        isOpen ? "z-[199]" : ""
+      }`}
+    >
+      <Container>
+        <div className="flex h-[72px] items-center gap-6">
+          <TutoraLogo href={logoHref} size="md" />
 
-      <NavIconButton href={conversationsHref} label={t("nav.chat")}>
-        <MessageSquare className="h-5 w-5" />
-      </NavIconButton>
+          <nav className="hidden flex-1 items-center justify-center gap-1 lg:flex">
+            {centerNav.map((item) => (
+              <Link
+                key={item.href + item.label}
+                href={item.href}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition duration-150 ease-in-out ${
+                  isActive(item.href)
+                    ? "bg-[var(--primary-from)] text-white shadow-sm"
+                    : "text-[var(--text-muted)] hover:bg-indigo-50 hover:text-[var(--primary-from)]"
+                }`}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
 
-      <ProfileMenu user={user} />
-    </>
-  )
-
-  const guestActions = ready && !isLoggedIn && (
-    <>
-      <Link
-        href="/login"
-        className="text-sm font-bold text-slate-500 hover:text-[#1E293B] dark:text-zinc-400 dark:hover:text-zinc-100"
-      >
-        {t("nav.login")}
-      </Link>
-      <Link
-        href="/register"
-        className="inline-flex items-center justify-center rounded-2xl bg-[#1E293B] px-8 py-3 text-sm font-bold text-white shadow-xl shadow-slate-200 transition hover:bg-slate-800 dark:bg-zinc-100 dark:text-zinc-950 dark:shadow-zinc-900/50 dark:hover:bg-white"
-      >
-        {t("nav.join")}
-      </Link>
-    </>
-  )
-
-  const displayName = getUserDisplayName(user)
-  const initials = getUserInitials(user)
-
-  const mobileMenu =
-    mounted && isOpen ? (
-      <div
-        className="fixed inset-0 z-[200] md:hidden"
-        role="dialog"
-        aria-modal="true"
-        aria-label={t("nav.menu")}
-      >
-        <button
-          type="button"
-          className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm dark:bg-black/60"
-          aria-label={t("nav.closeMenu")}
-          onClick={closeMenu}
-        />
-
-        <div className="fixed inset-y-0 right-0 z-[201] flex h-dvh w-[min(100%,20rem)] flex-col border-l border-slate-100 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-950">
-          <div className="flex h-14 shrink-0 items-center justify-between border-b border-slate-100 px-4 dark:border-zinc-800">
-            <span className="text-sm font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500">
-              {t("nav.menu")}
-            </span>
+          <div className="ml-auto hidden items-center gap-2 lg:flex">
             <button
               type="button"
-              onClick={closeMenu}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-              aria-label={t("nav.closeMenu")}
+              onClick={toggleTheme}
+              aria-label={darkMode ? t("theme.lightAria") : t("theme.darkAria")}
+              className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-button)] border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] transition duration-150 hover:bg-[var(--chip)] hover:text-[var(--text-primary)]"
             >
-              <X className="h-5 w-5" />
+              {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
-          </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4">
-            {ready && isLoggedIn && (
-              <div className="mb-4 flex items-center gap-3 rounded-2xl bg-violet-50 px-4 py-3 dark:bg-violet-950/30">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#8B5CF6] to-[#6366F1] text-sm font-black text-white">
-                  {initials}
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-black text-[#1E293B] dark:text-zinc-100">
-                    {displayName || user?.email}
-                  </p>
-                  <p className="truncate text-xs font-semibold text-slate-500 dark:text-zinc-400">
-                    {user?.email}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            <p className="mb-2 px-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-zinc-500">
-              {t("nav.sectionBrowse")}
-            </p>
-            <div className="space-y-1">
-              {navItems.map((item) => (
-                <MobileMenuLink
-                  key={item.href}
-                  href={item.href}
-                  onClick={closeMenu}
-                  active={isActive(item.href)}
-                >
-                  {item.label}
-                </MobileMenuLink>
-              ))}
-            </div>
+            <button
+              type="button"
+              onClick={() => setLocale(locale === "en" ? "ru" : "en")}
+              className="inline-flex h-10 items-center gap-1.5 rounded-[var(--radius-button)] border border-[var(--border)] bg-[var(--surface)] px-3 text-xs font-semibold text-[var(--text-secondary)] transition duration-150 hover:bg-[var(--chip)] hover:text-[var(--text-primary)]"
+            >
+              <Languages className="h-4 w-4" />
+              {locale.toUpperCase()}
+            </button>
 
             {ready && isLoggedIn && (
               <>
-                <p className="mb-2 mt-6 px-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-zinc-500">
-                  {t("nav.sectionAccount")}
-                </p>
-                <div className="space-y-1">
-                  <MobileMenuLink
-                    href={homeHref}
-                    onClick={closeMenu}
-                    icon={User}
-                    active={pathname.startsWith(homeHref)}
-                  >
-                    {isTutor ? t("nav.tutorDashboard") : t("nav.profile")}
-                  </MobileMenuLink>
-                  <MobileMenuLink
-                    href={dashboardTabHref(isTutor ? "bookings" : "lessons", user)}
-                    onClick={closeMenu}
-                    icon={Calendar}
-                  >
-                    {t("dash.tab.lessons")}
-                  </MobileMenuLink>
-                  <MobileMenuLink
-                    href={conversationsHref}
-                    onClick={closeMenu}
-                    icon={MessageSquare}
-                  >
-                    {t("nav.chat")}
-                  </MobileMenuLink>
-                  <MobileMenuLink
-                    href={notificationsHref}
-                    onClick={closeMenu}
-                    icon={Bell}
-                  >
-                    {t("nav.notifications")}
-                  </MobileMenuLink>
-                  {!isTutor && (
-                    <MobileMenuLink
-                      href={favoritesHref}
-                      onClick={closeMenu}
-                      icon={Heart}
-                    >
-                      {t("nav.favorites")}
-                    </MobileMenuLink>
-                  )}
-                </div>
+                <NotificationMenu notificationsHref={notificationsHref} />
+                <NavIconButton href={conversationsHref} label={t("nav.chat")}>
+                  <MessageSquare className="h-4 w-4" />
+                </NavIconButton>
+                <ProfileMenu user={user} />
               </>
             )}
 
-            <p className="mb-2 mt-6 px-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-zinc-500">
-              {t("nav.sectionSettings")}
-            </p>
-            <div className="space-y-1">
-              <button
-                type="button"
-                onClick={toggleTheme}
-                className="flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:text-zinc-200 dark:hover:bg-zinc-800/80"
-              >
-                {darkMode ? (
-                  <Sun className="h-5 w-5 shrink-0 opacity-80" />
-                ) : (
-                  <Moon className="h-5 w-5 shrink-0 opacity-80" />
-                )}
-                <span className="flex-1">
-                  {darkMode ? t("theme.light") : t("theme.dark")}
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setLocale(locale === "en" ? "ru" : "en")}
-                className="flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:text-zinc-200 dark:hover:bg-zinc-800/80"
-              >
-                <Languages className="h-5 w-5 shrink-0 opacity-80" />
-                <span className="flex-1">{t("lang.switch")}</span>
-                <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-black tabular-nums text-[#8B5CF6] dark:bg-zinc-800">
-                  {locale.toUpperCase()}
-                </span>
-              </button>
-            </div>
-
-            {ready && isLoggedIn && (
-              <div className="mt-6 border-t border-slate-100 pt-4 dark:border-zinc-800">
-                <MobileMenuLink onClick={handleLogout} icon={LogOut}>
-                  <span className="text-red-600 dark:text-red-400">
-                    {t("nav.logout")}
-                  </span>
-                </MobileMenuLink>
-              </div>
-            )}
-
             {ready && !isLoggedIn && (
-              <div className="mt-6 space-y-2 border-t border-slate-100 pt-4 dark:border-zinc-800">
+              <>
                 <Link
                   href="/login"
-                  onClick={closeMenu}
-                  className="block w-full rounded-2xl border-2 border-slate-200 py-3.5 text-center text-sm font-bold text-slate-700 dark:border-zinc-700 dark:text-zinc-200"
+                  className="rounded-[var(--radius-button)] px-4 py-2.5 text-sm font-semibold text-[var(--text-secondary)] transition duration-150 hover:bg-[var(--chip)] hover:text-[var(--text-primary)]"
                 >
                   {t("nav.login")}
                 </Link>
                 <Link
-                  href="/register"
-                  onClick={closeMenu}
-                  className="block w-full rounded-2xl bg-[#1E293B] py-3.5 text-center text-sm font-bold text-white dark:bg-zinc-100 dark:text-zinc-950"
+                  href="/signup"
+                  className="rounded-[var(--radius-button)] bg-[var(--primary)] px-5 py-2.5 text-sm font-semibold text-[var(--primary-foreground)] shadow-[var(--shadow-sm)] transition duration-150 hover:bg-[var(--primary-hover)]"
                 >
                   {t("nav.join")}
                 </Link>
-              </div>
+              </>
             )}
-          </div>
-        </div>
-      </div>
-    ) : null
-
-  return (
-    <nav
-      className={`sticky top-0 border-b border-slate-100 bg-white/80 backdrop-blur-xl transition-colors dark:border-zinc-800 dark:bg-zinc-950/80 ${
-        isOpen ? "z-[199]" : "z-50"
-      }`}
-    >
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-14 items-center justify-between md:h-20">
-          <Link
-            href={isLoggedIn ? DEFAULT_AUTH_ROUTE : "/"}
-            className="group flex min-w-0 cursor-pointer items-center gap-2 sm:gap-3"
-          >
-            <div className="shrink-0 rotate-12 rounded-[12px] bg-[#8B5CF6] p-2 shadow-lg shadow-violet-200 transition-transform duration-500 group-hover:rotate-45 dark:shadow-violet-900/40 md:rounded-[14px] md:p-2.5">
-              <NavIcon className="h-5 w-5 text-white md:h-6 md:w-6" />
-            </div>
-            <span className="truncate text-xl font-black tracking-tight text-[#1E293B] dark:text-zinc-100 md:text-2xl">
-              Vector<span className="text-[#8B5CF6]">+</span>
-            </span>
-          </Link>
-
-          <div className="hidden items-center space-x-10 md:flex">
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`relative px-1 py-1 text-sm font-bold uppercase tracking-wide transition-all ${
-                  isActive(item.href)
-                    ? "text-[#8B5CF6]"
-                    : "text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-300"
-                }`}
-              >
-                {item.label}
-                {isActive(item.href) && (
-                  <span className="absolute -bottom-1 left-0 h-1 w-full rounded-full bg-[#8B5CF6]" />
-                )}
-              </Link>
-            ))}
-
-            <div className="ml-6 flex items-center gap-3">
-              <button
-                type="button"
-                onClick={toggleTheme}
-                aria-label={darkMode ? t("theme.lightAria") : t("theme.darkAria")}
-                className="rounded-2xl border border-slate-200 bg-slate-50 p-2.5 text-slate-600 transition hover:bg-slate-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-              >
-                {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setLocale(locale === "en" ? "ru" : "en")}
-                aria-label={
-                  locale === "en" ? t("lang.ariaWhenEn") : t("lang.ariaWhenRu")
-                }
-                title={locale === "en" ? t("lang.ariaWhenEn") : t("lang.ariaWhenRu")}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-black uppercase tracking-wider text-slate-700 transition hover:bg-slate-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-              >
-                <Languages className="h-4 w-4 shrink-0 text-slate-500 dark:text-zinc-400" />
-                <span className="tabular-nums">{locale.toUpperCase()}</span>
-              </button>
-
-              {authActions}
-              {guestActions}
-            </div>
           </div>
 
           <button
             type="button"
-            onClick={() => setIsOpen((open) => !open)}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 transition hover:bg-slate-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 md:hidden"
+            onClick={() => setIsOpen((o) => !o)}
+            className="ml-auto flex h-10 w-10 items-center justify-center rounded-[var(--radius-button)] border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] lg:hidden"
             aria-expanded={isOpen}
             aria-label={isOpen ? t("nav.closeMenu") : t("nav.menu")}
           >
-            {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
-      </div>
+      </Container>
 
-      {mobileMenu && createPortal(mobileMenu, document.body)}
-    </nav>
+      {mounted &&
+        isOpen &&
+        createPortal(
+          <div className="fixed inset-0 z-[200] lg:hidden" role="dialog" aria-modal>
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              onClick={closeMenu}
+              aria-label={t("nav.closeMenu")}
+            />
+            <div className="absolute inset-y-0 right-0 flex w-[min(100%,20rem)] flex-col border-l border-[var(--border)] bg-[var(--surface)] shadow-2xl">
+              <div className="flex h-[72px] items-center justify-between border-b border-[var(--border)] px-4">
+                <span className="text-sm font-bold text-[var(--text-muted)]">
+                  {t("nav.menu")}
+                </span>
+                <button type="button" onClick={closeMenu} className="p-2">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4">
+                {centerNav.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={closeMenu}
+                    className={`mb-1 block rounded-full px-4 py-3 text-sm font-semibold transition duration-150 ${
+                      isActive(item.href)
+                        ? "bg-[var(--primary-from)] text-white"
+                        : "text-[var(--text-secondary)] hover:bg-[var(--chip)]"
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+                {ready && !isLoggedIn && (
+                  <div className="mt-4 grid gap-2 border-t border-[var(--border)] pt-4">
+                    <Link
+                      href="/login"
+                      onClick={closeMenu}
+                      className="rounded-full px-4 py-3 text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--chip)]"
+                    >
+                      {t("nav.login")}
+                    </Link>
+                    <Link
+                      href="/signup"
+                      onClick={closeMenu}
+                      className="rounded-full bg-[var(--primary)] px-4 py-3 text-center text-sm font-semibold text-[var(--primary-foreground)]"
+                    >
+                      {t("nav.join")}
+                    </Link>
+                  </div>
+                )}
+                {ready && isLoggedIn && (
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="mt-4 flex w-full items-center gap-2 rounded-[var(--radius-button)] px-4 py-3 text-sm font-semibold text-red-600"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    {t("nav.logout")}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+    </header>
   )
 }

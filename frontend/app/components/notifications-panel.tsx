@@ -1,9 +1,11 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { Bell, Loader2 } from "lucide-react"
 import { useTranslations } from "@/lib/i18n/locale-context"
 import { api, type AppNotification } from "@/lib/api-client"
+import { EmptyState } from "@/app/components/ui/empty-state"
+import { LIVE_FEED_POLL_INTERVAL_MS } from "@/lib/use-live-notifications"
 
 function formatWhen(iso: string, locale: string) {
   return new Date(iso).toLocaleString(locale === "ru" ? "ru-RU" : "en-US", {
@@ -14,10 +16,19 @@ function formatWhen(iso: string, locale: string) {
   })
 }
 
-export function NotificationsPanel() {
+type NotificationsPanelProps = {
+  onRefresh?: () => Promise<void>
+  autoMarkRead?: boolean
+}
+
+export function NotificationsPanel({
+  onRefresh,
+  autoMarkRead = true,
+}: NotificationsPanelProps = {}) {
   const { t, locale } = useTranslations()
   const [items, setItems] = useState<AppNotification[]>([])
   const [loading, setLoading] = useState(true)
+  const autoMarkedRef = useRef(false)
 
   const load = useCallback(async () => {
     try {
@@ -30,83 +41,88 @@ export function NotificationsPanel() {
     }
   }, [])
 
-  useEffect(() => {
-    load()
-  }, [load])
-
-  const markRead = async (id: string) => {
-    await api.notifications.markRead(id)
-    setItems((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
-    )
-  }
-
-  const markAllRead = async () => {
+  const markAllRead = useCallback(async () => {
     await api.notifications.markAllRead()
     setItems((prev) => prev.map((n) => ({ ...n, read: true })))
-  }
+    await onRefresh?.()
+  }, [onRefresh])
+
+  useEffect(() => {
+    void load()
+    const interval = setInterval(() => {
+      void load()
+    }, LIVE_FEED_POLL_INTERVAL_MS)
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void load()
+      }
+    }
+
+    window.addEventListener("focus", handleVisibility)
+    document.addEventListener("visibilitychange", handleVisibility)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener("focus", handleVisibility)
+      document.removeEventListener("visibilitychange", handleVisibility)
+    }
+  }, [load])
+
+  useEffect(() => {
+    if (!autoMarkRead || loading || autoMarkedRef.current) return
+    if (!items.some((item) => !item.read)) {
+      autoMarkedRef.current = true
+      return
+    }
+
+    autoMarkedRef.current = true
+    void markAllRead()
+  }, [autoMarkRead, items, loading, markAllRead])
 
   if (loading) {
     return (
       <div className="flex justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-[#8B5CF6]" />
+        <Loader2 className="h-8 w-8 animate-spin text-[var(--primary-from)]" />
       </div>
     )
   }
 
   if (items.length === 0) {
     return (
-      <p className="font-semibold text-slate-400 dark:text-zinc-500">
-        {t("dash.notifications.empty")}
-      </p>
+      <EmptyState
+        icon={Bell}
+        title={t("dash.notifications.empty")}
+        description={t("dash.notifications.empty")}
+      />
     )
   }
 
-  const unread = items.filter((n) => !n.read).length
-
   return (
     <div className="space-y-4">
-      {unread > 0 && (
-        <button
-          type="button"
-          onClick={markAllRead}
-          className="text-sm font-bold text-[#8B5CF6] hover:underline"
-        >
-          {t("notifications.markAllRead")}
-        </button>
-      )}
-      <div className="space-y-3">
-        {items.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => !item.read && markRead(item.id)}
-            className={`flex w-full items-start gap-4 rounded-[2rem] border p-5 text-left transition ${
-              item.read
-                ? "border-slate-100 bg-slate-50/80 dark:border-zinc-800 dark:bg-zinc-900/50"
-                : "border-violet-100 bg-violet-50/60 dark:border-violet-900/40 dark:bg-violet-950/20"
-            }`}
-          >
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#8B5CF6] text-white">
-              <Bell className="h-5 w-5" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="font-black text-[#1E293B] dark:text-zinc-100">{item.title}</p>
-              {item.body && (
-                <p className="mt-1 text-sm font-medium text-slate-500 dark:text-zinc-400">
-                  {item.body}
+      <ul className="space-y-2">
+        {items.map((notification) => (
+          <li key={notification.id}>
+            <div
+              className={`w-full rounded-2xl border px-4 py-3 text-left ${
+                notification.read
+                  ? "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
+                  : "border-[var(--primary-soft)] bg-[var(--primary-soft)] text-[var(--text-primary)]"
+              }`}
+            >
+              <p className="text-sm font-semibold">{notification.title}</p>
+              {notification.body && (
+                <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                  {notification.body}
                 </p>
               )}
-              <p className="mt-2 text-xs font-semibold text-slate-400">
-                {formatWhen(item.createdAt, locale)}
+              <p className="mt-2 text-xs text-[var(--text-muted)]">
+                {formatWhen(notification.createdAt, locale)}
               </p>
             </div>
-            {!item.read && (
-              <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[#8B5CF6]" />
-            )}
-          </button>
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   )
 }

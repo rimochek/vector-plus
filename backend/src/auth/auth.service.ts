@@ -2,12 +2,15 @@ import {
   Injectable,
   BadRequestException,
   UnauthorizedException,
+  ConflictException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
 import {
   AccountStatus,
+  AuthProvider,
+  AvatarSource,
   CurrencyCode,
   UserRole,
 } from '@prisma/client';
@@ -15,9 +18,15 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
 import {
+  GOOGLE_EMAIL_LINK_REQUIRED,
+  GoogleAuthDto,
+} from './dto/google-auth.dto';
+import { GoogleAuthService } from './google-auth.service';
+import {
   createRefreshTokenValue,
   hashRefreshToken,
 } from './refresh-token.util';
+import { AdminRoleService } from '../admin/admin-role.service';
 
 function buildLearningGoals(
   lookingFor?: string,
@@ -66,6 +75,8 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private googleAuthService: GoogleAuthService,
+    private adminRoleService: AdminRoleService,
   ) {}
 
   private get accessTokenTtlSeconds(): number {
@@ -98,6 +109,251 @@ export class AuthService {
       },
     });
     return raw;
+  }
+
+  private async issueAuthResponse(userId: string, roleHint?: string) {
+    const user = await this.getById(userId);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const tokens = await this.issueTokenPair(user.id, user.email);
+    const userResponse = await this.buildUserResponse(user.id);
+
+    return {
+      message: 'Authentication successful',
+      access_token: tokens.accessToken,
+      refreshTokenMaxAgeMs: tokens.refreshTokenMaxAgeMs,
+      refreshToken: tokens.refreshToken,
+      user: userResponse
+        ? {
+            ...userResponse,
+            role:
+              roleHint ??
+              userResponse.role ??
+              (user.roles[0]?.role.toLowerCase() as string),
+          }
+        : null,
+    };
+  }
+
+  private displayNameFromGoogle(profile: {
+    name?: string;
+    givenName?: string;
+    familyName?: string;
+    email: string;
+  }): string {
+    const fromName = profile.name?.trim();
+    if (fromName) return fromName;
+    const fromParts = `${profile.givenName ?? ''} ${profile.familyName ?? ''}`.trim();
+    if (fromParts) return fromParts;
+    return profile.email.split('@')[0] ?? 'Tutora user';
+  }
+
+  async authenticateWithGoogle(dto: GoogleAuthDto) {
+    const googleProfile = await this.googleAuthService.verifyIdToken(dto.credential);
+
+    const existingIdentity = await this.prisma.authIdentity.findUnique({
+      where: {
+        provider_providerAccountId: {
+          provider: AuthProvider.GOOGLE,
+          providerAccountId: googleProfile.sub,
+        },
+      },
+      include: { user: true },
+    });
+
+    if (existingIdentity?.user && !existingIdentity.user.deletedAt) {
+      await this.prisma.user.update({
+        where: { id: existingIdentity.userId },
+        data: { lastLoginAt: new Date(), emailVerifiedAt: new Date() },
+      });
+      return this.issueAuthResponse(existingIdentity.userId);
+    }
+
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: googleProfile.email },
+      include: { roles: true, authIdentities: true },
+    });
+
+    if (existingUser && !existingUser.deletedAt) {
+      const hasGoogle = existingUser.authIdentities.some(
+        (identity) => identity.provider === AuthProvider.GOOGLE,
+      );
+      if (hasGoogle) {
+        return this.issueAuthResponse(existingUser.id);
+      }
+
+      if (this.googleAuthService.isAutoLinkAllowed(googleProfile)) {
+        await this.prisma.authIdentity.create({
+          data: {
+            provider: AuthProvider.GOOGLE,
+            providerAccountId: googleProfile.sub,
+            providerEmail: googleProfile.email,
+            userId: existingUser.id,
+          },
+        });
+        await this.applyGoogleAvatarIfMissing(existingUser.id, googleProfile.picture);
+        await this.prisma.user.update({
+          where: { id: existingUser.id },
+          data: { lastLoginAt: new Date(), emailVerifiedAt: new Date() },
+        });
+        return this.issueAuthResponse(existingUser.id);
+      }
+
+      throw new ConflictException({
+        message:
+          'This Google account matches an existing Tutora account. Sign in with email first, then connect Google in account settings.',
+        code: GOOGLE_EMAIL_LINK_REQUIRED,
+      });
+    }
+
+    const intendedRole = dto.intendedRole === 'TUTOR' ? UserRole.TUTOR : UserRole.STUDENT;
+    if (
+      dto.intendedRole &&
+      !['STUDENT', 'TUTOR'].includes(dto.intendedRole)
+    ) {
+      throw new BadRequestException('Invalid signup role');
+    }
+
+    const displayName = this.displayNameFromGoogle(googleProfile);
+    const user = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          email: googleProfile.email,
+          passwordHash: null,
+          accountStatus: AccountStatus.ACTIVE,
+          emailVerifiedAt: new Date(),
+          roles: { create: { role: intendedRole } },
+          authIdentities: {
+            create: {
+              provider: AuthProvider.GOOGLE,
+              providerAccountId: googleProfile.sub,
+              providerEmail: googleProfile.email,
+            },
+          },
+        },
+      });
+
+      if (intendedRole === UserRole.STUDENT) {
+        await tx.studentProfile.create({
+          data: {
+            userId: created.id,
+            displayName,
+            avatarUrl: googleProfile.picture ?? null,
+            avatarSource: googleProfile.picture
+              ? AvatarSource.GOOGLE
+              : AvatarSource.DEFAULT,
+            onboardingCompleted: false,
+          },
+        });
+      } else {
+        await tx.tutorProfile.create({
+          data: {
+            userId: created.id,
+            displayName,
+            bio: 'Profile in progress.',
+            defaultHourlyRateCents: 500000,
+            defaultCurrency: CurrencyCode.KZT,
+            experienceYears: 0,
+            education: 'Pending',
+            avatarUrl: googleProfile.picture ?? null,
+            avatarSource: googleProfile.picture
+              ? AvatarSource.GOOGLE
+              : AvatarSource.DEFAULT,
+            applicationStatus: 'DRAFT',
+            isAcceptingStudents: false,
+          },
+        });
+      }
+
+      return created;
+    });
+
+    return this.issueAuthResponse(
+      user.id,
+      intendedRole === UserRole.TUTOR ? 'tutor' : 'student',
+    );
+  }
+
+  async linkGoogleAccount(userId: string, credential: string) {
+    const googleProfile = await this.googleAuthService.verifyIdToken(credential);
+
+    const taken = await this.prisma.authIdentity.findUnique({
+      where: {
+        provider_providerAccountId: {
+          provider: AuthProvider.GOOGLE,
+          providerAccountId: googleProfile.sub,
+        },
+      },
+    });
+
+    if (taken && taken.userId !== userId) {
+      throw new ConflictException('This Google account is already linked to another user');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { authIdentities: true },
+    });
+    if (!user || user.deletedAt) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const alreadyLinked = user.authIdentities.some(
+      (identity) => identity.provider === AuthProvider.GOOGLE,
+    );
+    if (alreadyLinked) {
+      return { success: true, linked: true };
+    }
+
+    await this.prisma.authIdentity.create({
+      data: {
+        provider: AuthProvider.GOOGLE,
+        providerAccountId: googleProfile.sub,
+        providerEmail: googleProfile.email,
+        userId,
+      },
+    });
+
+    await this.applyGoogleAvatarIfMissing(userId, googleProfile.picture);
+
+    return { success: true, linked: true };
+  }
+
+  private async applyGoogleAvatarIfMissing(userId: string, picture?: string) {
+    if (!picture) return;
+
+    const [student, tutor] = await Promise.all([
+      this.prisma.studentProfile.findUnique({ where: { userId } }),
+      this.prisma.tutorProfile.findUnique({ where: { userId } }),
+    ]);
+
+    if (
+      student &&
+      (!student.avatarUrl || student.avatarSource === AvatarSource.DEFAULT)
+    ) {
+      await this.prisma.studentProfile.update({
+        where: { id: student.id },
+        data: {
+          avatarUrl: picture,
+          avatarSource: AvatarSource.GOOGLE,
+        },
+      });
+    }
+
+    if (
+      tutor &&
+      (!tutor.avatarUrl || tutor.avatarSource === AvatarSource.DEFAULT)
+    ) {
+      await this.prisma.tutorProfile.update({
+        where: { id: tutor.id },
+        data: {
+          avatarUrl: picture,
+          avatarSource: AvatarSource.GOOGLE,
+        },
+      });
+    }
   }
 
   private async issueTokenPair(userId: string, email: string) {
@@ -151,6 +407,7 @@ export class AuthService {
       firstName,
       lastName,
       role,
+      minimal,
       about,
       lookingFor,
       tags,
@@ -174,13 +431,15 @@ export class AuthService {
       throw new BadRequestException('User with this email already exists');
     }
 
-    if (!ageChoices?.length) {
+    const isMinimal = Boolean(minimal);
+
+    if (!isMinimal && !ageChoices?.length) {
       throw new BadRequestException('Select at least one age preference');
     }
 
     const ageRangeStored = serializeAgeChoices(ageChoices);
 
-    if (role === 'student') {
+    if (!isMinimal && role === 'student') {
       if (budgetMinCents == null || budgetMaxCents == null) {
         throw new BadRequestException('Hourly budget range is required');
       }
@@ -189,7 +448,7 @@ export class AuthService {
           'Maximum budget must be greater than or equal to minimum',
         );
       }
-    } else {
+    } else if (!isMinimal && role === 'tutor') {
       if (
         !description?.trim() ||
         experienceYears == null ||
@@ -216,6 +475,13 @@ export class AuthService {
           roles: {
             create: { role: prismaRole },
           },
+          authIdentities: {
+            create: {
+              provider: AuthProvider.PASSWORD,
+              providerAccountId: email.toLowerCase(),
+              providerEmail: email.toLowerCase(),
+            },
+          },
         },
       });
 
@@ -225,11 +491,14 @@ export class AuthService {
             userId: created.id,
             displayName,
             bio: about,
-            learningGoals: buildLearningGoals(lookingFor, tags),
-            budgetMinCents,
-            budgetMaxCents,
+            learningGoals: isMinimal
+              ? undefined
+              : buildLearningGoals(lookingFor, tags),
+            budgetMinCents: isMinimal ? null : budgetMinCents,
+            budgetMaxCents: isMinimal ? null : budgetMaxCents,
             budgetCurrency: currency,
-            preferredTutorAgeRange: ageRangeStored,
+            preferredTutorAgeRange: isMinimal ? null : ageRangeStored,
+            onboardingCompleted: false,
           },
         });
       } else {
@@ -237,14 +506,21 @@ export class AuthService {
           data: {
             userId: created.id,
             displayName,
-            bio: description!.trim(),
-            defaultHourlyRateCents: hourlyRateCents!,
+            bio: isMinimal
+              ? 'Profile in progress.'
+              : description!.trim(),
+            defaultHourlyRateCents: isMinimal ? 500000 : hourlyRateCents!,
             defaultCurrency: CurrencyCode.KZT,
-            experienceYears,
-            education: education!.trim(),
-            country: country!.trim(),
-            city: city!.trim(),
-            preferredStudentAgeRange: ageRangeStored,
+            experienceYears: isMinimal ? 0 : experienceYears,
+            education: isMinimal ? 'Pending' : education!.trim(),
+            country: isMinimal ? null : country!.trim(),
+            city: isMinimal ? null : city!.trim(),
+            preferredStudentAgeRange: isMinimal ? null : ageRangeStored,
+            searchDocument: tags?.length
+              ? JSON.stringify({ tags })
+              : undefined,
+            applicationStatus: isMinimal ? 'DRAFT' : 'SUBMITTED',
+            isAcceptingStudents: !isMinimal,
           },
         });
       }
@@ -273,6 +549,12 @@ export class AuthService {
 
     if (!user || user.deletedAt) {
       throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (!user.passwordHash) {
+      throw new UnauthorizedException(
+        'This account uses Google sign-in. Continue with Google instead.',
+      );
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
@@ -328,55 +610,89 @@ export class AuthService {
     const user = await this.getById(userId);
     if (!user) return null;
 
-    const roles = user.roles.map((r) => r.role.toLowerCase());
+    await this.adminRoleService.syncAdminRoleForUser(user.id, user.email);
+    const refreshed = await this.getById(userId);
+    if (!refreshed) return null;
+
+    const roles = refreshed.roles.map((r) => r.role.toLowerCase());
     const displayName =
-      user.studentProfile?.displayName ??
-      user.tutorProfile?.displayName ??
+      refreshed.studentProfile?.displayName ??
+      refreshed.tutorProfile?.displayName ??
       null;
 
     return {
-      id: user.id,
-      email: user.email,
+      id: refreshed.id,
+      email: refreshed.email,
       roles,
       role: roles[0] ?? 'student',
       displayName,
-      studentProfile: user.studentProfile
+      studentProfile: refreshed.studentProfile
         ? (() => {
             const { text, tags } = parseLearningGoals(
-              user.studentProfile.learningGoals,
+              refreshed.studentProfile!.learningGoals,
             );
             return {
-              id: user.studentProfile.id,
-              displayName: user.studentProfile.displayName,
-              budgetMinCents: user.studentProfile.budgetMinCents,
-              budgetMaxCents: user.studentProfile.budgetMaxCents,
-              budgetCurrency: user.studentProfile.budgetCurrency,
+              id: refreshed.studentProfile!.id,
+              displayName: refreshed.studentProfile!.displayName,
+              budgetMinCents: refreshed.studentProfile!.budgetMinCents,
+              budgetMaxCents: refreshed.studentProfile!.budgetMaxCents,
+              budgetCurrency: refreshed.studentProfile!.budgetCurrency,
               preferredTutorAgeRange:
-                user.studentProfile.preferredTutorAgeRange,
+                refreshed.studentProfile!.preferredTutorAgeRange,
               preferredTutorAgeRanges: parseAgeChoices(
-                user.studentProfile.preferredTutorAgeRange,
+                refreshed.studentProfile!.preferredTutorAgeRange,
               ),
-              learningGoals: text || user.studentProfile.learningGoals,
+              learningGoals: text || refreshed.studentProfile!.learningGoals,
               tags,
+              onboardingCompleted: refreshed.studentProfile!.onboardingCompleted,
+              preferredLessonFormat: refreshed.studentProfile!.preferredLessonFormat,
+              preferredTimes: refreshed.studentProfile!.preferredTimes,
+              learningLevel: refreshed.studentProfile!.learningLevel,
             };
           })()
         : null,
-      tutorProfile: user.tutorProfile
-        ? {
-            id: user.tutorProfile.id,
-            displayName: user.tutorProfile.displayName,
-            bio: user.tutorProfile.bio,
-            defaultHourlyRateCents: user.tutorProfile.defaultHourlyRateCents,
-            experienceYears: user.tutorProfile.experienceYears,
-            education: user.tutorProfile.education,
-            country: user.tutorProfile.country,
-            city: user.tutorProfile.city,
-            preferredStudentAgeRange:
-              user.tutorProfile.preferredStudentAgeRange,
-            preferredStudentAgeRanges: parseAgeChoices(
-              user.tutorProfile.preferredStudentAgeRange,
-            ),
-          }
+      tutorProfile: refreshed.tutorProfile
+        ? (() => {
+            let tags: string[] = [];
+            try {
+              const metadata = refreshed.tutorProfile!.searchDocument
+                ? (JSON.parse(refreshed.tutorProfile!.searchDocument) as {
+                    tags?: unknown;
+                  })
+                : {};
+              tags = Array.isArray(metadata.tags)
+                ? metadata.tags.filter(
+                    (tag): tag is string => typeof tag === 'string',
+                  )
+                : [];
+            } catch {
+              tags = [];
+            }
+            return {
+              id: refreshed.tutorProfile!.id,
+              displayName: refreshed.tutorProfile!.displayName,
+              bio: refreshed.tutorProfile!.bio,
+              headline: refreshed.tutorProfile!.headline,
+              avatarUrl: refreshed.tutorProfile!.avatarUrl,
+              defaultHourlyRateCents: refreshed.tutorProfile!.defaultHourlyRateCents,
+              experienceYears: refreshed.tutorProfile!.experienceYears,
+              education: refreshed.tutorProfile!.education,
+              country: refreshed.tutorProfile!.country,
+              city: refreshed.tutorProfile!.city,
+              applicationStatus: refreshed.tutorProfile!.applicationStatus,
+              applicationRejectionReason:
+                refreshed.tutorProfile!.applicationRejectionReason,
+              applicationSubmittedAt:
+                refreshed.tutorProfile!.applicationSubmittedAt?.toISOString() ??
+                null,
+              preferredStudentAgeRange:
+                refreshed.tutorProfile!.preferredStudentAgeRange,
+              preferredStudentAgeRanges: parseAgeChoices(
+                refreshed.tutorProfile!.preferredStudentAgeRange,
+              ),
+              tags,
+            };
+          })()
         : null,
     };
   }

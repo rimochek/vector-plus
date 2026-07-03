@@ -9,6 +9,7 @@ import {
   Max,
   IsArray,
   ValidateIf,
+  IsBoolean,
 } from 'class-validator';
 
 export class CreateUserDto {
@@ -16,7 +17,7 @@ export class CreateUserDto {
   email: string;
 
   @IsString()
-  @MinLength(6)
+  @MinLength(8)
   password: string;
 
   @IsString()
@@ -29,6 +30,11 @@ export class CreateUserDto {
 
   @IsIn(['student', 'tutor'])
   role: 'student' | 'tutor';
+
+  /** When true, only account fields are required; profile is created as draft. */
+  @IsOptional()
+  @IsBoolean()
+  minimal?: boolean;
 
   @IsOptional()
   @IsString()
@@ -48,12 +54,12 @@ export class CreateUserDto {
   @IsString({ each: true })
   ageChoices?: string[];
 
-  @ValidateIf((o) => o.role === 'student')
+  @ValidateIf((o) => o.role === 'student' && !o.minimal)
   @IsInt()
   @Min(0)
   budgetMinCents?: number;
 
-  @ValidateIf((o) => o.role === 'student')
+  @ValidateIf((o) => o.role === 'student' && !o.minimal)
   @IsInt()
   @Min(0)
   budgetMaxCents?: number;
@@ -62,33 +68,33 @@ export class CreateUserDto {
   @IsIn(['USD', 'EUR', 'GBP', 'KZT', 'RUB'])
   budgetCurrency?: 'USD' | 'EUR' | 'GBP' | 'KZT' | 'RUB';
 
-  @ValidateIf((o) => o.role === 'tutor')
+  @ValidateIf((o) => o.role === 'tutor' && !o.minimal)
   @IsString()
   @MinLength(200)
   description?: string;
 
-  @ValidateIf((o) => o.role === 'tutor')
+  @ValidateIf((o) => o.role === 'tutor' && !o.minimal)
   @IsInt()
   @Min(0)
   @Max(50)
   experienceYears?: number;
 
-  @ValidateIf((o) => o.role === 'tutor')
+  @ValidateIf((o) => o.role === 'tutor' && !o.minimal)
   @IsString()
   @MinLength(2)
   education?: string;
 
-  @ValidateIf((o) => o.role === 'tutor')
+  @ValidateIf((o) => o.role === 'tutor' && !o.minimal)
   @IsString()
   @MinLength(2)
   country?: string;
 
-  @ValidateIf((o) => o.role === 'tutor')
+  @ValidateIf((o) => o.role === 'tutor' && !o.minimal)
   @IsString()
   @MinLength(2)
   city?: string;
 
-  @ValidateIf((o) => o.role === 'tutor')
+  @ValidateIf((o) => o.role === 'tutor' && !o.minimal)
   @IsInt()
   @Min(1000)
   @Max(1500000)

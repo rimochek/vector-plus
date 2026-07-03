@@ -1,16 +1,102 @@
-export const LEARNING_TOPIC_IDS = [
+import type { MessageId } from "@/lib/i18n/messages"
+
+export const DISCIPLINE_SUBJECTS = [
+  "All",
+  "Mathematics",
+  "Computer Science",
+  "Physics",
+  "Chemistry",
+  "Biology",
+  "History",
+] as const
+
+export type DisciplineSubject = (typeof DISCIPLINE_SUBJECTS)[number]
+
+export const LANGUAGE_IDS = [
+  "english",
+  "russian",
+  "kazakh",
+  "spanish",
+  "chinese",
+] as const
+
+export type LanguageId = (typeof LANGUAGE_IDS)[number]
+
+export const EXAM_IDS = [
   "sat_act",
   "ielts",
   "nuet",
   "unt",
+  "nis",
+  "nspm",
+  "bil",
+  "ap",
+  "ib",
+] as const
+
+export type ExamId = (typeof EXAM_IDS)[number]
+
+export const LEARNING_TOPIC_IDS = [...LANGUAGE_IDS, ...EXAM_IDS] as const
+
+export type LearningTopicId = (typeof LEARNING_TOPIC_IDS)[number]
+
+/** Legacy tag ids that may still exist on older profiles. */
+export const LEGACY_TOPIC_IDS = [
   "school_prep",
-  "math",
-  "english",
   "ap_ib",
+  "math",
   "programming",
 ] as const
 
-export type LearningTopicId = (typeof LEARNING_TOPIC_IDS)[number]
+const LEGACY_TOPIC_LABELS: Record<string, MessageId> = {
+  school_prep: "register.tag.school_prep",
+  ap_ib: "register.tag.ap_ib",
+  math: "register.tag.math",
+  programming: "find.topic.programming",
+}
+
+export function topicLabelId(id: string): MessageId {
+  if (LEGACY_TOPIC_LABELS[id]) return LEGACY_TOPIC_LABELS[id]
+  if (
+    LEARNING_TOPIC_IDS.includes(id as LearningTopicId) ||
+    LANGUAGE_IDS.includes(id as LanguageId) ||
+    EXAM_IDS.includes(id as ExamId)
+  ) {
+    return `register.tag.${id}` as MessageId
+  }
+  return `register.tag.${id}` as MessageId
+}
+
+export function disciplineLabelId(subject: string): MessageId {
+  const map: Record<string, MessageId> = {
+    All: "find.allDisciplines",
+    Mathematics: "find.math",
+    "Computer Science": "find.cs",
+    Physics: "find.physics",
+    Chemistry: "find.chemistry",
+    Biology: "find.biology",
+    History: "find.history",
+  }
+  return map[subject] ?? "find.allDisciplines"
+}
+
+export function tutorMatchesTopic(
+  tutorTags: string[] | undefined,
+  topicId: LearningTopicId,
+): boolean {
+  const tags = tutorTags ?? []
+  if (tags.includes(topicId)) return true
+
+  const legacyMap: Partial<Record<LearningTopicId, string[]>> = {
+    ap: ["ap_ib"],
+    ib: ["ap_ib"],
+    nis: ["school_prep"],
+    nspm: ["school_prep"],
+    bil: ["school_prep"],
+  }
+
+  return legacyMap[topicId]?.some((legacy) => tags.includes(legacy)) ?? false
+}
 
 export const TIME_SLOT_IDS = [
   "morning",
@@ -65,7 +151,7 @@ export const TUTORS_DATA: Tutor[] = [
     name: "Dr. Sarah Jenkins",
     subject: "Mathematics",
     expertise: ["Calculus", "Linear Algebra", "Statistics"],
-    topics: ["math", "sat_act", "ap_ib", "school_prep"],
+    topics: ["sat_act", "ap", "ib", "nis"],
     timeSlots: ["afternoon", "evening"],
     rating: 4.9,
     reviews: 124,
@@ -83,7 +169,7 @@ export const TUTORS_DATA: Tutor[] = [
     name: "James Wilson",
     subject: "Computer Science",
     expertise: ["React", "Python", "Data Structures"],
-    topics: ["programming", "ap_ib", "math"],
+    topics: ["ap", "ib", "english"],
     timeSlots: ["morning", "afternoon"],
     rating: 4.8,
     reviews: 89,
@@ -99,9 +185,9 @@ export const TUTORS_DATA: Tutor[] = [
   {
     id: 3,
     name: "Elena Rodriguez",
-    subject: "Languages",
+    subject: "History",
     expertise: ["Spanish", "French", "ESL"],
-    topics: ["english", "ielts", "sat_act"],
+    topics: ["english", "spanish", "ielts", "sat_act"],
     timeSlots: ["morning", "weekend"],
     rating: 5.0,
     reviews: 210,
@@ -119,7 +205,7 @@ export const TUTORS_DATA: Tutor[] = [
     name: "Michael Chen",
     subject: "Physics",
     expertise: ["Quantum Mechanics", "Thermodynamics"],
-    topics: ["ap_ib", "math", "school_prep"],
+    topics: ["ap", "ib", "bil"],
     timeSlots: ["evening", "weekend"],
     rating: 4.7,
     reviews: 45,
@@ -137,7 +223,7 @@ export const TUTORS_DATA: Tutor[] = [
     name: "Amina Kassymova",
     subject: "Mathematics",
     expertise: ["NUET Prep", "UNT Math", "Algebra"],
-    topics: ["nuet", "unt", "math", "school_prep"],
+    topics: ["nuet", "unt", "kazakh", "nspm"],
     timeSlots: ["afternoon", "weekend"],
     rating: 4.9,
     reviews: 156,
@@ -153,9 +239,9 @@ export const TUTORS_DATA: Tutor[] = [
   {
     id: 6,
     name: "David Park",
-    subject: "Computer Science",
+    subject: "Chemistry",
     expertise: ["Algorithms", "Java", "Interview Prep"],
-    topics: ["programming", "ap_ib", "sat_act"],
+    topics: ["ap", "sat_act", "chinese"],
     timeSlots: ["evening"],
     rating: 4.6,
     reviews: 62,
