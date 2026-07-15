@@ -24,9 +24,15 @@ export type StoredUser = {
 
 export const AUTH_FETCH_INIT: RequestInit = { credentials: "include" }
 
+let accessToken: string | null = null
+
+export function getAccessToken(): string | null {
+  return accessToken
+}
+
 export function isLoggedIn(): boolean {
   if (typeof window === "undefined") return false
-  return Boolean(localStorage.getItem("token"))
+  return Boolean(accessToken || localStorage.getItem("user"))
 }
 
 export function getStoredUser(): StoredUser | null {
@@ -42,7 +48,9 @@ export function getStoredUser(): StoredUser | null {
 
 export function saveAuthSession(accessToken: string, user: StoredUser): void {
   if (typeof window === "undefined") return
-  localStorage.setItem("token", accessToken)
+  // Access tokens intentionally stay in memory; the HttpOnly refresh cookie
+  // restores them after a reload without exposing long-lived credentials to JS.
+  globalThisAccessToken(accessToken)
   localStorage.setItem("user", JSON.stringify(user))
   handlingSessionExpiry = false
   notifyAuthChange()
@@ -108,6 +116,11 @@ export function notifyAuthChange(): void {
 let handlingSessionExpiry = false
 let refreshPromise: Promise<boolean> | null = null
 
+function globalThisAccessToken(token: string | null): void {
+  accessToken = token
+  if (typeof window !== "undefined") localStorage.removeItem("token")
+}
+
 export async function tryRefreshAccessToken(): Promise<boolean> {
   if (typeof window === "undefined") return false
   if (refreshPromise) return refreshPromise
@@ -123,7 +136,7 @@ export async function tryRefreshAccessToken(): Promise<boolean> {
       const data = (await res.json()) as { access_token?: string }
       if (!data.access_token) return false
 
-      localStorage.setItem("token", data.access_token)
+      globalThisAccessToken(data.access_token)
       handlingSessionExpiry = false
       notifyAuthChange()
       return true
@@ -141,7 +154,7 @@ export async function tryRefreshAccessToken(): Promise<boolean> {
 export function handleSessionExpired(): void {
   if (typeof window === "undefined" || handlingSessionExpiry) return
   const hadSession =
-    Boolean(localStorage.getItem("token")) ||
+    Boolean(accessToken) ||
     Boolean(localStorage.getItem("user"))
   if (!hadSession) return
 
@@ -158,7 +171,7 @@ export function handleSessionExpired(): void {
 
 function clearLocalSession(): void {
   if (typeof window === "undefined") return
-  localStorage.removeItem("token")
+  globalThisAccessToken(null)
   localStorage.removeItem("user")
   notifyAuthChange()
 }
@@ -182,11 +195,11 @@ export async function logout(): Promise<void> {
 export async function refreshCurrentUser(): Promise<StoredUser | null> {
   if (typeof window === "undefined") return null
 
-  let token = localStorage.getItem("token")
+  let token = getAccessToken()
   if (!token) {
     const refreshed = await tryRefreshAccessToken()
     if (!refreshed) return getStoredUser()
-    token = localStorage.getItem("token")
+    token = getAccessToken()
   }
 
   if (!token) return getStoredUser()
@@ -203,7 +216,7 @@ export async function refreshCurrentUser(): Promise<StoredUser | null> {
         handleSessionExpired()
         return null
       }
-      token = localStorage.getItem("token")
+      token = getAccessToken()
       if (!token) {
         handleSessionExpired()
         return null

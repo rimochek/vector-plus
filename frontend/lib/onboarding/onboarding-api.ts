@@ -2,6 +2,7 @@ import { getApiUrl } from "@/lib/api"
 import { api, type ApiTutor, type UpdateTutorProfilePayload } from "@/lib/api-client"
 import {
   AUTH_FETCH_INIT,
+  getAccessToken,
   saveAuthSession,
   type StoredUser,
 } from "@/lib/auth-client"
@@ -46,6 +47,7 @@ export async function signupMinimal(payload: MinimalSignupPayload) {
   const data = (await res.json()) as {
     access_token: string
     user: StoredUser
+    existingAccount?: boolean
   }
 
   if (data.access_token && data.user) {
@@ -77,8 +79,7 @@ export async function updateStudentProfile(payload: StudentProfileUpdate) {
 }
 
 async function apiFetchStudent<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("token") : null
+  const token = getAccessToken()
   const res = await fetch(`${getApiUrl()}${path}`, {
     ...AUTH_FETCH_INIT,
     ...options,

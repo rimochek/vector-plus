@@ -15,11 +15,20 @@ export function getSignupRole(): SignupRole | null {
 
 const STUDENT_DRAFT_KEY = "tutora-student-onboarding"
 
+import type { CountryId, CityId } from "@/lib/tutor-locations"
+
 export type StudentOnboardingDraft = {
   topicId?: string
+  customTopic?: string
   lookingFor?: string
+  goalId?: string
+  targetScore?: string
   lessonFormat?: "online" | "offline" | "either" | "unsure"
   budgetPresetId?: string
+  countryId?: CountryId
+  cityId?: CityId
+  customCountry?: string
+  customCity?: string
   city?: string
 }
 

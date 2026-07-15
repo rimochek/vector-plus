@@ -74,6 +74,14 @@ export function TutorProfileEditor({
   const [verificationDocuments, setVerificationDocuments] = useState<
     VerificationDocumentSummary[]
   >([])
+  const [telegramUsername, setTelegramUsername] = useState("")
+  const [phone, setPhone] = useState("")
+  const [preferredContactMethod, setPreferredContactMethod] = useState<
+    "TELEGRAM" | "PHONE" | "BOTH"
+  >("TELEGRAM")
+  const [showTelegramPublicly, setShowTelegramPublicly] = useState(false)
+  const [showPhonePublicly, setShowPhonePublicly] = useState(false)
+  const [acceptsDirectRequests, setAcceptsDirectRequests] = useState(true)
 
   useEffect(() => {
     api.tutors
@@ -90,6 +98,12 @@ export function TutorProfileEditor({
         setAvatarUrl(profile.avatarUrl ?? "")
         setTags(profile.tags ?? [])
         setLessonFormats(normalizeLessonFormats(profile.lessonFormats))
+        setTelegramUsername(profile.telegramUsername ?? "")
+        setPhone(profile.phone ?? "")
+        setPreferredContactMethod(profile.preferredContactMethod ?? "TELEGRAM")
+        setShowTelegramPublicly(profile.showTelegramPublicly ?? false)
+        setShowPhonePublicly(profile.showPhonePublicly ?? false)
+        setAcceptsDirectRequests(profile.acceptsDirectRequests ?? true)
       })
       .catch(() => toast.error(t("tutorDash.profileEdit.loadError")))
       .finally(() => setLoading(false))
@@ -139,6 +153,12 @@ export function TutorProfileEditor({
         city: city.trim(),
         tags,
         lessonFormats,
+        telegramUsername: telegramUsername.trim() || undefined,
+        phone: phone.trim() || undefined,
+        preferredContactMethod,
+        showTelegramPublicly,
+        showPhonePublicly,
+        acceptsDirectRequests,
       })
       toast.success(t("tutorDash.profileEdit.saved"))
       onSaved?.()
@@ -312,6 +332,70 @@ export function TutorProfileEditor({
               </Chip>
             )
           })}
+        </div>
+      </div>
+
+      <div className="rounded-[var(--radius-card)] border border-[var(--border)] p-5">
+        <h3 className="text-base font-bold text-[var(--text-primary)]">
+          {t("lead.contactTutor")}
+        </h3>
+        <p className="mt-1 text-sm text-[var(--text-muted)]">{t("lead.contactHint")}</p>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <FormField label={t("lead.field.telegram")}>
+            <Input
+              value={telegramUsername}
+              onChange={(event) => setTelegramUsername(event.target.value)}
+              placeholder="@username"
+            />
+          </FormField>
+          <FormField label={t("lead.field.phone")}>
+            <Input
+              value={phone}
+              onChange={(event) => setPhone(event.target.value)}
+              placeholder="+77000000000"
+            />
+          </FormField>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {(["TELEGRAM", "PHONE", "BOTH"] as const).map((method) => (
+            <Chip
+              key={method}
+              selected={preferredContactMethod === method}
+              onClick={() => setPreferredContactMethod(method)}
+            >
+              {method === "BOTH"
+                ? `${t("lead.telegram")} + ${t("lead.phone")}`
+                : method === "TELEGRAM"
+                  ? t("lead.telegram")
+                  : t("lead.phone")}
+            </Chip>
+          ))}
+        </div>
+        <div className="mt-4 space-y-2 text-sm">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={showTelegramPublicly}
+              onChange={(event) => setShowTelegramPublicly(event.target.checked)}
+            />
+            {t("lead.openTelegram")} ({t("lead.field.telegram")})
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={showPhonePublicly}
+              onChange={(event) => setShowPhonePublicly(event.target.checked)}
+            />
+            {t("lead.call")} ({t("lead.field.phone")})
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={acceptsDirectRequests}
+              onChange={(event) => setAcceptsDirectRequests(event.target.checked)}
+            />
+            {t("lead.leaveRequest")}
+          </label>
         </div>
       </div>
 

@@ -8,7 +8,6 @@ import {
   Languages,
   LogOut,
   Menu,
-  MessageSquare,
   Moon,
   Sun,
   X,
@@ -73,11 +72,12 @@ export const Navigation = () => {
           { href: "/tutors", label: t("nav.findTutors") },
           { href: "/tutor-dashboard", label: t("nav.tutorDashboard") },
         ]
-      : [
-          { href: "/tutors", label: t("nav.findTutors") },
-          { href: "/dashboard", label: t("nav.dashboard") },
-        ]
-    : [{ href: "/tutors", label: t("nav.findTutors") }]
+      : [{ href: "/tutors", label: t("nav.findTutors") }]
+    : [
+        { href: "/tutors", label: t("nav.findTutors") },
+        { href: "/signup/tutor", label: t("nav.becomeTutor") },
+        { href: "/login", label: t("nav.forTutors") },
+      ]
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href.split("?")[0])
@@ -149,12 +149,16 @@ export const Navigation = () => {
               {locale.toUpperCase()}
             </button>
 
-            {ready && isLoggedIn && (
+            {ready && isLoggedIn && isTutor && (
               <>
                 <NotificationMenu notificationsHref={notificationsHref} />
-                <NavIconButton href={conversationsHref} label={t("nav.chat")}>
-                  <MessageSquare className="h-4 w-4" />
-                </NavIconButton>
+                <ProfileMenu user={user} />
+              </>
+            )}
+
+            {ready && isLoggedIn && !isTutor && (
+              <>
+                <NotificationMenu notificationsHref={notificationsHref} />
                 <ProfileMenu user={user} />
               </>
             )}

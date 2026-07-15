@@ -16,6 +16,7 @@ import {
   GoogleAuthDivider,
   GoogleSignInButton,
 } from "@/app/components/auth/google-sign-in-button"
+import { TelegramSignInButton } from "@/app/components/auth/telegram-sign-in-button"
 import {
   ProgressCelebration,
   StudentSearchPreview,
@@ -26,6 +27,18 @@ import {
   topicLabelId,
   type LearningTopicId,
 } from "@/app/components/tutors-data"
+import {
+  CountryCityPicker,
+  isLocationComplete,
+} from "@/app/components/onboarding/country-city-picker"
+import { resolveLocationLabels } from "@/lib/tutor-locations"
+import {
+  formatStudentLookingFor,
+  getStudentGoalOptions,
+  resolveStudentTopicId,
+  shouldSkipGoalStep,
+  needsTargetScore,
+} from "@/lib/onboarding/student-goal-options"
 import { useTranslations } from "@/lib/i18n/locale-context"
 import { hourlyAmountToBudgetCents } from "@/lib/hourly-budget"
 import {
@@ -34,7 +47,6 @@ import {
 } from "@/lib/onboarding/onboarding-api"
 import {
   BUDGET_PRESETS,
-  STUDENT_GOALS,
   STUDENT_PROGRESS_STAGES,
 } from "@/lib/onboarding/registration-copy"
 import {
@@ -43,9 +55,9 @@ import {
 } from "@/lib/onboarding/registration-utils"
 import {
   clearStudentDraft,
-  loadStudentDraft,
   saveSignupRole,
   saveStudentDraft,
+  type StudentOnboardingDraft,
 } from "@/lib/onboarding/signup-session"
 import type { StepDirection } from "@/app/components/onboarding/animated-step"
 import {
@@ -53,6 +65,7 @@ import {
   type StudentAccountValues,
 } from "@/lib/validation/student-registration"
 import { readReturnToParam } from "@/lib/guest-auth"
+import { getDefaultRouteForUser } from "@/lib/auth-client"
 
 type StudentStep =
   | "account"
@@ -78,13 +91,13 @@ function progressForStep(step: StudentStep): number {
   return map[step]
 }
 
-function backTarget(step: StudentStep): StudentStep | null {
+function backTarget(step: StudentStep, draft: StudentOnboardingDraft): StudentStep | null {
   const map: Record<StudentStep, StudentStep | null> = {
     account: null,
     welcome: "account",
     subject: "welcome",
     goal: "subject",
-    format: "goal",
+    format: shouldSkipGoalStep(draft.topicId, draft.customTopic) ? "subject" : "goal",
     budget: "format",
     city: "budget",
     complete: "budget",
@@ -97,7 +110,7 @@ export function StudentSignupFlow() {
   const { t } = useTranslations()
   const [step, setStep] = useState<StudentStep>("account")
   const [direction, setDirection] = useState<StepDirection>("forward")
-  const [draft, setDraft] = useState(loadStudentDraft() ?? {})
+  const [draft, setDraft] = useState<StudentOnboardingDraft>({})
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const advanceTimer = useRef<number | null>(null)
@@ -119,19 +132,48 @@ export function StudentSignupFlow() {
     }
   }, [])
 
-  const topicOptions = useMemo(
+  const topicGroups = useMemo(
     () =>
       [
-        "math",
-        "english",
-        "ielts",
-        "sat_act",
-        "programming",
-        ...LANGUAGE_IDS.filter((id) => !["english"].includes(id)),
-        ...EXAM_IDS.filter((id) => !["ielts", "sat_act"].includes(id)),
-      ] as string[],
+        {
+          title: "Exams & tests",
+          topics: [
+            "ielts",
+            "sat_act",
+            "nuet",
+            "unt",
+            "nis",
+            "nspm",
+            "bil",
+            "ap",
+            "ib",
+          ] as string[],
+        },
+        {
+          title: "Languages",
+          topics: [...LANGUAGE_IDS],
+        },
+        {
+          title: "School subjects",
+          topics: ["math", "programming"],
+        },
+      ] as const,
     [],
   )
+
+  const resolvedTopic = resolveStudentTopicId(draft.topicId, draft.customTopic)
+  const goalOptions = useMemo(
+    () => getStudentGoalOptions(draft.topicId, draft.customTopic),
+    [draft.topicId, draft.customTopic],
+  )
+  const selectedGoal = goalOptions.find((goal) => goal.id === draft.goalId)
+  const showTargetScore = needsTargetScore(draft.topicId, draft.customTopic) &&
+    selectedGoal?.asksForScore
+
+  const nextAfterSubject = (): StudentStep => {
+    if (shouldSkipGoalStep(draft.topicId, draft.customTopic)) return "format"
+    return "goal"
+  }
 
   const go = (next: StudentStep, dir: StepDirection = "forward") => {
     setDirection(dir)
@@ -155,13 +197,17 @@ export function StudentSignupFlow() {
     setSubmitError(null)
     try {
       const { firstName, lastName } = splitFullName(values.fullName)
-      await signupMinimal({
+      const result = await signupMinimal({
         email: values.email,
         password: values.password,
         firstName,
         lastName,
         role: "student",
       })
+      if (result.existingAccount) {
+        router.push(getDefaultRouteForUser(result.user))
+        return
+      }
       go("welcome")
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Signup failed")
@@ -182,8 +228,19 @@ export function StudentSignupFlow() {
       const budgetMaxCents =
         budget.max != null ? hourlyAmountToBudgetCents(budget.max) : undefined
 
+      let city = draft.city
+      if (draft.countryId && draft.cityId) {
+        const labels = resolveLocationLabels(
+          draft.countryId,
+          draft.cityId,
+          draft.customCity ?? "",
+          draft.customCountry ?? "",
+        )
+        city = `${labels.city}, ${labels.country}`
+      }
+
       await updateStudentProfile({
-        ...(draft.topicId ? { tags: [draft.topicId] } : {}),
+        ...(resolvedTopic ? { tags: [resolvedTopic] } : {}),
         ...(draft.lookingFor ? { lookingFor: draft.lookingFor } : {}),
         ...(draft.lessonFormat
           ? { preferredLessonFormat: draft.lessonFormat }
@@ -195,7 +252,7 @@ export function StudentSignupFlow() {
               budgetCurrency: "KZT",
             }
           : {}),
-        ...(draft.city ? { city: draft.city } : {}),
+        ...(city ? { city } : {}),
         onboardingCompleted: true,
       })
 
@@ -212,10 +269,14 @@ export function StudentSignupFlow() {
     draft.lessonFormat === "offline" || draft.lessonFormat === "either"
 
   const summaryItems = [
-    draft.topicId
-      ? t(topicLabelId(draft.topicId as LearningTopicId))
+    resolvedTopic
+      ? EXAM_IDS.includes(resolvedTopic as (typeof EXAM_IDS)[number]) ||
+        LANGUAGE_IDS.includes(resolvedTopic as (typeof LANGUAGE_IDS)[number]) ||
+        ["math", "programming"].includes(resolvedTopic)
+        ? t(topicLabelId(resolvedTopic as LearningTopicId))
+        : resolvedTopic
       : "Subject",
-    draft.lookingFor ?? "Goal",
+    draft.lookingFor ?? (shouldSkipGoalStep(draft.topicId, draft.customTopic) ? "—" : "Goal"),
     draft.lessonFormat === "online"
       ? "Online"
       : draft.lessonFormat === "offline"
@@ -233,7 +294,7 @@ export function StudentSignupFlow() {
     step === "account"
       ? undefined
       : () => {
-          const target = backTarget(step)
+          const target = backTarget(step, draft)
           if (!target) return
           if (step === "city") {
             go("budget", "back")
@@ -263,11 +324,23 @@ export function StudentSignupFlow() {
           <GoogleSignInButton
             intendedRole="STUDENT"
             redirectAfterSuccess={false}
-            onSuccess={() => go("welcome")}
+            onSuccess={(data) => {
+              if (data.existingAccount) {
+                router.push(getDefaultRouteForUser(data.user))
+                return
+              }
+              go("welcome")
+            }}
             onError={(message) => setSubmitError(message)}
           />
           <GoogleAuthDivider />
-          <form className="space-y-4" onSubmit={createAccount}>
+          <TelegramSignInButton
+            intendedRole="STUDENT"
+            redirectAfterSuccess={false}
+            onSuccess={(data) => data.existingAccount ? router.push(getDefaultRouteForUser(data.user)) : go("welcome")}
+            onError={(message) => setSubmitError(message)}
+          />
+          <form className="hidden" onSubmit={createAccount} aria-hidden="true">
             <FormField
               label="Name"
               inputProps={{
@@ -336,27 +409,47 @@ export function StudentSignupFlow() {
         <div className="space-y-5">
           <StepHeader
             title="What do you want to learn?"
-            description="Choose the option that fits you best."
+            description="Choose a category or enter your own subject."
           />
-          <div className="space-y-2">
-            {topicOptions.slice(0, 8).map((topicId) => (
-              <OptionCard
-                key={topicId}
-                selected={draft.topicId === topicId}
-                onClick={() => {
-                  const already = draft.topicId === topicId
-                  patchDraft({ topicId })
-                  if (!already) scheduleAdvance("goal")
-                }}
-              >
-                {t(topicLabelId(topicId as LearningTopicId))}
-              </OptionCard>
-            ))}
-          </div>
+          {topicGroups.map((group) => (
+            <div key={group.title} className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                {group.title}
+              </p>
+              <div className="space-y-2">
+                {group.topics.map((topicId) => (
+                  <OptionCard
+                    key={topicId}
+                    selected={draft.topicId === topicId && !draft.customTopic}
+                    onClick={() => {
+                      const already = draft.topicId === topicId && !draft.customTopic
+                      patchDraft({ topicId, customTopic: undefined })
+                      if (!already) scheduleAdvance(nextAfterSubject())
+                    }}
+                  >
+                    {t(topicLabelId(topicId as LearningTopicId))}
+                  </OptionCard>
+                ))}
+              </div>
+            </div>
+          ))}
+          <FormField
+            label="Or type your own"
+            inputProps={{
+              id: "student-custom-topic",
+              value: draft.customTopic ?? "",
+              placeholder: "e.g. Biology, Economics, Chess…",
+              onChange: (event) =>
+                patchDraft({
+                  customTopic: event.target.value,
+                  topicId: event.target.value.trim() ? undefined : draft.topicId,
+                }),
+            }}
+          />
           <StepNavigation
             onBack={() => go("welcome", "back")}
-            onContinue={() => (draft.topicId ? go("goal") : undefined)}
-            continueDisabled={!draft.topicId}
+            onContinue={() => (resolvedTopic ? go(nextAfterSubject()) : undefined)}
+            continueDisabled={!resolvedTopic}
           />
         </div>
       ) : null}
@@ -365,24 +458,57 @@ export function StudentSignupFlow() {
         <div className="space-y-5">
           <StepHeader title="What are you working toward?" />
           <div className="space-y-2">
-            {STUDENT_GOALS.map((goal) => (
+            {goalOptions.map((goal) => (
               <OptionCard
-                key={goal}
-                selected={draft.lookingFor === goal}
+                key={goal.id}
+                selected={draft.goalId === goal.id}
                 onClick={() => {
-                  const already = draft.lookingFor === goal
-                  patchDraft({ lookingFor: goal })
-                  if (!already) scheduleAdvance("format")
+                  const already = draft.goalId === goal.id
+                  patchDraft({
+                    goalId: goal.id,
+                    lookingFor: formatStudentLookingFor(
+                      goal.id,
+                      goal.label,
+                      draft.targetScore,
+                    ),
+                  })
+                  if (!already && !goal.asksForScore) scheduleAdvance("format")
                 }}
               >
-                {goal}
+                {goal.label}
               </OptionCard>
             ))}
           </div>
+          {showTargetScore ? (
+            <FormField
+              label="Target score"
+              inputProps={{
+                id: "student-target-score",
+                value: draft.targetScore ?? "",
+                placeholder: "e.g. IELTS 7.0, SAT 1400, NUET 120",
+                onChange: (event) => {
+                  const targetScore = event.target.value
+                  const goal = goalOptions.find((item) => item.id === draft.goalId)
+                  patchDraft({
+                    targetScore,
+                    lookingFor: goal
+                      ? formatStudentLookingFor(goal.id, goal.label, targetScore)
+                      : draft.lookingFor,
+                  })
+                },
+              }}
+            />
+          ) : null}
           <StepNavigation
             onBack={() => go("subject", "back")}
-            onContinue={() => (draft.lookingFor ? go("format") : undefined)}
-            continueDisabled={!draft.lookingFor}
+            onContinue={() => {
+              if (!draft.goalId) return
+              if (showTargetScore && !draft.targetScore?.trim()) return
+              go("format")
+            }}
+            continueDisabled={
+              !draft.goalId || (showTargetScore && !draft.targetScore?.trim())
+            }
           />
         </div>
       ) : null}
@@ -415,7 +541,9 @@ export function StudentSignupFlow() {
             ))}
           </div>
           <StepNavigation
-            onBack={() => go("goal", "back")}
+            onBack={() =>
+              go(shouldSkipGoalStep(draft.topicId, draft.customTopic) ? "subject" : "goal", "back")
+            }
             onContinue={() => (draft.lessonFormat ? go("budget") : undefined)}
             continueDisabled={!draft.lessonFormat}
           />
@@ -461,21 +589,42 @@ export function StudentSignupFlow() {
       {step === "city" ? (
         <div className="space-y-5">
           <StepHeader
-            title="Which city are you in?"
+            title="Where are you based?"
             description="We'll use this for in-person tutors nearby."
           />
-          <FormField
-            label="City"
-            inputProps={{
-              id: "student-city",
-              value: draft.city ?? "",
-              onChange: (event) => patchDraft({ city: event.target.value }),
-            }}
+          <CountryCityPicker
+            countryId={draft.countryId ?? ""}
+            cityId={draft.cityId ?? ""}
+            customCountry={draft.customCountry ?? ""}
+            customCity={draft.customCity ?? ""}
+            onCountryChange={(countryId) => patchDraft({ countryId, cityId: undefined })}
+            onCityChange={(cityId) => patchDraft({ cityId })}
+            onCustomCountryChange={(customCountry) => patchDraft({ customCountry })}
+            onCustomCityChange={(customCity) => patchDraft({ customCity })}
           />
           <StepNavigation
             onBack={() => go("budget", "back")}
-            onContinue={() => go("complete")}
-            continueDisabled={!draft.city?.trim()}
+            onContinue={() => {
+              if (
+                !isLocationComplete(
+                  draft.countryId ?? "",
+                  draft.cityId ?? "",
+                  draft.customCountry ?? "",
+                  draft.customCity ?? "",
+                )
+              ) {
+                return
+              }
+              go("complete")
+            }}
+            continueDisabled={
+              !isLocationComplete(
+                draft.countryId ?? "",
+                draft.cityId ?? "",
+                draft.customCountry ?? "",
+                draft.customCity ?? "",
+              )
+            }
           />
         </div>
       ) : null}

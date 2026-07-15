@@ -91,10 +91,11 @@ export class AdminService {
       if (
         tutor.applicationStatus !== TutorApplicationStatus.SUBMITTED &&
         tutor.applicationStatus !== TutorApplicationStatus.UNDER_REVIEW &&
-        tutor.applicationStatus !== TutorApplicationStatus.REJECTED
+        tutor.applicationStatus !== TutorApplicationStatus.REJECTED &&
+        tutor.applicationStatus !== TutorApplicationStatus.APPROVED
       ) {
         throw new BadRequestException(
-          'Only submitted or rejected applications can be approved',
+          'Only submitted, approved, or rejected applications can be verified',
         );
       }
 
@@ -106,6 +107,7 @@ export class AdminService {
           applicationRejectionReason: null,
           applicationReviewedAt: new Date(),
           applicationReviewedByUserId: admin.id,
+          // Admin approval grants the verified badge (listing is already open on register).
           verificationStatus: VerificationStatus.VERIFIED,
         },
         include: {

@@ -27,6 +27,7 @@ import {
   hashRefreshToken,
 } from './refresh-token.util';
 import { AdminRoleService } from '../admin/admin-role.service';
+import type { TelegramUserData } from '../telegram/telegram-auth.service';
 
 function buildLearningGoals(
   lookingFor?: string,
@@ -111,7 +112,11 @@ export class AuthService {
     return raw;
   }
 
-  private async issueAuthResponse(userId: string, roleHint?: string) {
+  private async issueAuthResponse(
+    userId: string,
+    roleHint?: string,
+    options?: { existingAccount?: boolean },
+  ) {
     const user = await this.getById(userId);
     if (!user) {
       throw new UnauthorizedException('User not found');
@@ -121,10 +126,13 @@ export class AuthService {
     const userResponse = await this.buildUserResponse(user.id);
 
     return {
-      message: 'Authentication successful',
+      message: options?.existingAccount
+        ? 'Login successful'
+        : 'Authentication successful',
       access_token: tokens.accessToken,
       refreshTokenMaxAgeMs: tokens.refreshTokenMaxAgeMs,
       refreshToken: tokens.refreshToken,
+      existingAccount: Boolean(options?.existingAccount),
       user: userResponse
         ? {
             ...userResponse,
@@ -168,7 +176,9 @@ export class AuthService {
         where: { id: existingIdentity.userId },
         data: { lastLoginAt: new Date(), emailVerifiedAt: new Date() },
       });
-      return this.issueAuthResponse(existingIdentity.userId);
+      return this.issueAuthResponse(existingIdentity.userId, undefined, {
+        existingAccount: true,
+      });
     }
 
     const existingUser = await this.prisma.user.findUnique({
@@ -181,7 +191,9 @@ export class AuthService {
         (identity) => identity.provider === AuthProvider.GOOGLE,
       );
       if (hasGoogle) {
-        return this.issueAuthResponse(existingUser.id);
+        return this.issueAuthResponse(existingUser.id, undefined, {
+          existingAccount: true,
+        });
       }
 
       if (this.googleAuthService.isAutoLinkAllowed(googleProfile)) {
@@ -198,7 +210,9 @@ export class AuthService {
           where: { id: existingUser.id },
           data: { lastLoginAt: new Date(), emailVerifiedAt: new Date() },
         });
-        return this.issueAuthResponse(existingUser.id);
+        return this.issueAuthResponse(existingUser.id, undefined, {
+          existingAccount: true,
+        });
       }
 
       throw new ConflictException({
@@ -274,6 +288,119 @@ export class AuthService {
       user.id,
       intendedRole === UserRole.TUTOR ? 'tutor' : 'student',
     );
+  }
+
+  async authenticateWithTelegram(
+    profile: TelegramUserData,
+    intendedRole?: 'STUDENT' | 'TUTOR',
+  ) {
+    const telegramId = String(profile.id);
+    const existing = await this.prisma.authIdentity.findUnique({
+      where: {
+        provider_providerAccountId: {
+          provider: AuthProvider.TELEGRAM,
+          providerAccountId: telegramId,
+        },
+      },
+    });
+
+    if (existing) {
+      await this.prisma.telegramConnection.upsert({
+        where: { userId: existing.userId },
+        create: {
+          userId: existing.userId,
+          telegramUserId: telegramId,
+          telegramChatId: telegramId,
+          telegramUsername: profile.username,
+          firstName: profile.first_name,
+          lastName: profile.last_name,
+          photoUrl: profile.photo_url,
+          locale: profile.language_code,
+        },
+        update: {
+          telegramUsername: profile.username,
+          firstName: profile.first_name,
+          lastName: profile.last_name,
+          photoUrl: profile.photo_url,
+          locale: profile.language_code,
+        },
+      });
+      return this.issueAuthResponse(existing.userId, undefined, { existingAccount: true });
+    }
+
+    const role = intendedRole === 'TUTOR' ? UserRole.TUTOR : UserRole.STUDENT;
+    const displayName = `${profile.first_name} ${profile.last_name ?? ''}`.trim();
+    const user = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          email: `telegram+${telegramId}@telegram.tutora.local`,
+          accountStatus: AccountStatus.ACTIVE,
+          roles: { create: { role } },
+          authIdentities: {
+            create: {
+              provider: AuthProvider.TELEGRAM,
+              providerAccountId: telegramId,
+            },
+          },
+          telegramConnection: {
+            create: {
+              telegramUserId: telegramId,
+              telegramChatId: telegramId,
+              telegramUsername: profile.username,
+              firstName: profile.first_name,
+              lastName: profile.last_name,
+              photoUrl: profile.photo_url,
+              locale: profile.language_code,
+            },
+          },
+        },
+      });
+
+      if (role === UserRole.STUDENT) {
+        await tx.studentProfile.create({
+          data: {
+            userId: created.id,
+            displayName,
+            avatarUrl: profile.photo_url,
+            onboardingCompleted: false,
+          },
+        });
+      } else {
+        await tx.tutorProfile.create({
+          data: {
+            userId: created.id,
+            displayName,
+            bio: 'Profile in progress.',
+            defaultHourlyRateCents: 500000,
+            defaultCurrency: CurrencyCode.KZT,
+            experienceYears: 0,
+            education: 'Pending',
+            avatarUrl: profile.photo_url,
+            applicationStatus: 'DRAFT',
+            isAcceptingStudents: false,
+          },
+        });
+      }
+      return created;
+    });
+
+    return this.issueAuthResponse(user.id, role === UserRole.TUTOR ? 'tutor' : 'student');
+  }
+
+  async attachTelegramChat(telegramUserId: string, telegramChatId: string) {
+    const identity = await this.prisma.authIdentity.findUnique({
+      where: {
+        provider_providerAccountId: {
+          provider: AuthProvider.TELEGRAM,
+          providerAccountId: telegramUserId,
+        },
+      },
+    });
+    if (!identity) return;
+    await this.prisma.telegramConnection.updateMany({
+      where: { userId: identity.userId },
+      data: { telegramChatId, notificationsEnabled: true },
+    });
   }
 
   async linkGoogleAccount(userId: string, credential: string) {
@@ -425,10 +552,57 @@ export class AuthService {
 
     const existingUser = await this.prisma.user.findUnique({
       where: { email },
+      include: { roles: true },
     });
 
     if (existingUser) {
-      throw new BadRequestException('User with this email already exists');
+      if (existingUser.deletedAt) {
+        throw new BadRequestException('User with this email already exists');
+      }
+
+      if (!existingUser.passwordHash) {
+        throw new BadRequestException(
+          'This account uses Google sign-in. Continue with Google instead.',
+        );
+      }
+
+      const isPasswordValid = await bcrypt.compare(
+        password,
+        existingUser.passwordHash,
+      );
+      if (!isPasswordValid) {
+        throw new BadRequestException('User with this email already exists');
+      }
+
+      const expectedRole = role === 'tutor' ? UserRole.TUTOR : UserRole.STUDENT;
+      const hasRole = existingUser.roles.some((r) => r.role === expectedRole);
+      if (!hasRole) {
+        throw new BadRequestException(
+          role === 'tutor'
+            ? 'This account is not registered as a tutor'
+            : 'This account is not registered as a student',
+        );
+      }
+
+      await this.prisma.user.update({
+        where: { id: existingUser.id },
+        data: { lastLoginAt: new Date() },
+      });
+
+      const tokens = await this.issueTokenPair(
+        existingUser.id,
+        existingUser.email,
+      );
+      const userResponse = await this.buildUserResponse(existingUser.id);
+
+      return {
+        message: 'Login successful',
+        access_token: tokens.accessToken,
+        refreshTokenMaxAgeMs: tokens.refreshTokenMaxAgeMs,
+        refreshToken: tokens.refreshToken,
+        existingAccount: true,
+        user: userResponse ? { ...userResponse, role } : null,
+      };
     }
 
     const isMinimal = Boolean(minimal);
@@ -535,6 +709,7 @@ export class AuthService {
       access_token: tokens.accessToken,
       refreshTokenMaxAgeMs: tokens.refreshTokenMaxAgeMs,
       refreshToken: tokens.refreshToken,
+      existingAccount: false,
       user: await this.buildUserResponse(user.id),
     };
   }
@@ -695,5 +870,76 @@ export class AuthService {
           })()
         : null,
     };
+  }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.deletedAt) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    if (!user.passwordHash) {
+      throw new BadRequestException(
+        'This account uses Google sign-in and has no password. Sign in with Google instead.',
+      );
+    }
+
+    const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isValid) {
+      throw new BadRequestException('Current password is incorrect');
+    }
+
+    if (currentPassword === newPassword) {
+      throw new BadRequestException(
+        'New password must be different from the current password',
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+    });
+
+    await this.prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+
+    return { success: true, message: 'Password updated successfully' };
+  }
+
+  async deleteAccount(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.deletedAt) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.refreshToken.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+
+      await tx.tutorProfile.updateMany({
+        where: { userId },
+        data: { isAcceptingStudents: false },
+      });
+
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          deletedAt: new Date(),
+          accountStatus: AccountStatus.DEACTIVATED,
+          email: `deleted+${userId}@deleted.tutora.local`,
+        },
+      });
+    });
+
+    return { success: true, message: 'Account deleted successfully' };
   }
 }

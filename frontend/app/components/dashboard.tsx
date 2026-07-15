@@ -41,6 +41,7 @@ import { CancelLessonModal } from "@/app/components/cancel-lesson-modal"
 import { ChatInbox } from "@/app/components/chat-inbox"
 import { NotificationsPanel } from "@/app/components/notifications-panel"
 import { DashboardProfileMenu } from "@/app/components/dashboard-profile-menu"
+import { AccountSettingsPanel } from "@/app/components/account-settings-panel"
 import { useLiveDashboardFeed } from "@/lib/use-live-dashboard-feed"
 import { TutoraLogo } from "@/app/components/ui/tutora-logo"
 import { StickySidebar } from "@/app/components/ui/sticky-sidebar"
@@ -967,12 +968,11 @@ export const Dashboard = () => {
             )}
 
             {tab === "settings" && (
-              <DashboardCard className="p-8 text-center">
-                <Settings className="mx-auto mb-4 h-12 w-12 rounded-2xl bg-[var(--surface-secondary)] p-3 text-[var(--text-muted)]" />
-                <h2 className="text-xl font-bold text-[var(--text-primary)]">
+              <DashboardCard className="p-6">
+                <h2 className="mb-6 text-xl font-bold text-[var(--text-primary)]">
                   {t("dash.nav.settings")}
                 </h2>
-                <p className="mt-2 text-sm text-[var(--text-muted)]">{t("dash.settingsHint")}</p>
+                <AccountSettingsPanel />
               </DashboardCard>
             )}
           </div>

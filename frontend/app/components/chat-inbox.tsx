@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ArrowLeft, Loader2, Search, Send } from "lucide-react"
+import { Loader2, Search, Send, X } from "lucide-react"
 import { useTranslations } from "@/lib/i18n/locale-context"
 import {
   api,
@@ -282,7 +282,13 @@ export function ChatInbox({ onConversationChange, onActivity }: ChatInboxProps) 
           </div>
         </aside>
 
-        <div className={`min-h-0 flex-1 flex-col ${activeId ? "flex" : "hidden lg:flex"}`}>
+        <div
+          className={`min-h-0 flex-1 flex-col ${
+            activeId
+              ? "fixed inset-0 z-[250] flex bg-[var(--surface)] lg:relative lg:inset-auto lg:z-auto"
+              : "hidden lg:flex"
+          }`}
+        >
           {!activeId ? (
             <div className="flex flex-1 items-center justify-center p-8 text-sm font-semibold text-[var(--text-muted)]">
               {t("chat.selectConversation")}
@@ -294,9 +300,9 @@ export function ChatInbox({ onConversationChange, onActivity }: ChatInboxProps) 
                   type="button"
                   onClick={() => setActiveId(null)}
                   className="rounded-full p-2 text-[var(--text-muted)] hover:bg-[var(--chip)] lg:hidden"
-                  aria-label={t("nav.back")}
+                  aria-label={t("lead.close")}
                 >
-                  <ArrowLeft className="h-4 w-4" />
+                  <X className="h-5 w-5" />
                 </button>
                 <p className="font-black text-[var(--text-primary)] dark:text-[var(--text-primary)]">
                   {activeConversation?.counterpartyName}

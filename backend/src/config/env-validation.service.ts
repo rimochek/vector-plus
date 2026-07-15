@@ -24,6 +24,9 @@ export class EnvValidationService implements OnModuleInit {
         'R2_PUBLIC_BUCKET',
         'R2_PRIVATE_BUCKET',
         'R2_PUBLIC_BASE_URL',
+        'TELEGRAM_BOT_TOKEN',
+        'TELEGRAM_BOT_USERNAME',
+        'TELEGRAM_WEBHOOK_SECRET',
       ];
       const prodMissing = prodRequired.filter((key) => !this.config.get(key));
       if (prodMissing.length) {

@@ -52,15 +52,15 @@ describe('AdminController access', () => {
 
 describe('marketplace approval gate', () => {
   it('requires APPROVED status and isAcceptingStudents for public listing', () => {
-    const visible = {
+    const visible: { applicationStatus: TutorApplicationStatus; isAcceptingStudents: boolean } = {
       applicationStatus: TutorApplicationStatus.APPROVED,
       isAcceptingStudents: true,
     };
-    const submitted = {
+    const submitted: { applicationStatus: TutorApplicationStatus; isAcceptingStudents: boolean } = {
       applicationStatus: TutorApplicationStatus.SUBMITTED,
       isAcceptingStudents: false,
     };
-    const rejected = {
+    const rejected: { applicationStatus: TutorApplicationStatus; isAcceptingStudents: boolean } = {
       applicationStatus: TutorApplicationStatus.REJECTED,
       isAcceptingStudents: false,
     };

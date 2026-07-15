@@ -6,6 +6,7 @@ import { AuthController } from './auth.controller';
 import { GoogleAuthService } from './google-auth.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AdminRoleModule } from '../admin/admin-role.module';
+import { RateLimitService } from '../common/services/rate-limit.service';
 
 @Module({
   imports: [
@@ -23,7 +24,7 @@ import { AdminRoleModule } from '../admin/admin-role.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, GoogleAuthService],
+  providers: [AuthService, GoogleAuthService, RateLimitService],
   exports: [AuthService, GoogleAuthService, JwtModule],
 })
 export class AuthModule {}

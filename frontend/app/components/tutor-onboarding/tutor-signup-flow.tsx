@@ -17,6 +17,7 @@ import {
   GoogleAuthDivider,
   GoogleSignInButton,
 } from "@/app/components/auth/google-sign-in-button"
+import { TelegramSignInButton } from "@/app/components/auth/telegram-sign-in-button"
 import {
   TutorProfileBuildPreview,
 } from "@/app/components/onboarding/product-mini-preview"
@@ -26,7 +27,11 @@ import {
   topicLabelId,
   type LearningTopicId,
 } from "@/app/components/tutors-data"
-import { TUTOR_LOCATION_COUNTRIES } from "@/lib/tutor-locations"
+import { resolveLocationLabels, type CountryId, type CityId } from "@/lib/tutor-locations"
+import {
+  CountryCityPicker,
+  isLocationComplete,
+} from "@/app/components/onboarding/country-city-picker"
 import { useTranslations } from "@/lib/i18n/locale-context"
 import { formatTenge } from "@/lib/currency"
 import {
@@ -105,7 +110,7 @@ function backMap(step: TutorStep): TutorStep | null {
   const order: TutorStep[] = [...TUTOR_STEPS]
   const idx = order.indexOf(step)
   if (idx <= 0) return null
-  let prev = order[idx - 1]
+  const prev = order[idx - 1]
   if (step === "subject-detail") return "subject"
   if (step === "education") return "experience"
   if (step === "about") return "headline"
@@ -117,6 +122,10 @@ function backMap(step: TutorStep): TutorStep | null {
 
 type TutorDraft = {
   fullName: string
+  countryId: CountryId | ""
+  cityId: CityId | ""
+  customCountry: string
+  customCity: string
   city: string
   tags: string[]
   subjectDetail: string
@@ -132,6 +141,10 @@ type TutorDraft = {
 
 const defaultDraft: TutorDraft = {
   fullName: "",
+  countryId: "",
+  cityId: "",
+  customCountry: "",
+  customCity: "",
   city: "",
   tags: [],
   subjectDetail: "",
@@ -140,8 +153,8 @@ const defaultDraft: TutorDraft = {
   education: "",
   headline: "",
   bio: "",
-  hourlyRateAmount: 6000,
-  lessonFormats: ["online"],
+  hourlyRateAmount: 0,
+  lessonFormats: [],
   availability: [],
 }
 
@@ -305,13 +318,17 @@ export function TutorSignupFlow({ initialStep = "account" }: Props) {
     setLoading(true)
     setError(null)
     try {
-      await signupMinimal({
+      const result = await signupMinimal({
         email: values.email,
         password: values.password,
-        firstName: "Tutor",
-        lastName: "Applicant",
+        firstName: values.email.split("@")[0] || "User",
+        lastName: "User",
         role: "tutor",
       })
+      if (result.existingAccount) {
+        router.push(getDefaultRouteForUser(result.user))
+        return
+      }
       go("welcome")
     } catch (signupError) {
       setError(signupError instanceof Error ? signupError.message : "Signup failed")
@@ -378,11 +395,23 @@ export function TutorSignupFlow({ initialStep = "account" }: Props) {
           <GoogleSignInButton
             intendedRole="TUTOR"
             redirectAfterSuccess={false}
-            onSuccess={() => go("welcome")}
+            onSuccess={(data) => {
+              if (data.existingAccount) {
+                router.push(getDefaultRouteForUser(data.user))
+                return
+              }
+              go("welcome")
+            }}
             onError={(message) => setError(message)}
           />
           <GoogleAuthDivider />
-          <form className="space-y-4" onSubmit={createAccount}>
+          <TelegramSignInButton
+            intendedRole="TUTOR"
+            redirectAfterSuccess={false}
+            onSuccess={(data) => data.existingAccount ? router.push(getDefaultRouteForUser(data.user)) : go("welcome")}
+            onError={(message) => setError(message)}
+          />
+          <form className="hidden" onSubmit={createAccount} aria-hidden="true">
             <FormField
               label="Email"
               inputProps={{
@@ -466,32 +495,50 @@ export function TutorSignupFlow({ initialStep = "account" }: Props) {
 
       {step === "location" ? (
         <div className="space-y-5">
-          <StepHeader title="Where are you based?" />
-          <FormField
-            label="City"
-            inputProps={{
-              id: "tutor-city",
-              list: "tutor-cities",
-              value: draft.city,
-              onChange: (e) => setDraft((d) => ({ ...d, city: e.target.value })),
-            }}
+          <StepHeader
+            title={t("register.step4.tutorLocationTitle")}
+            description={t("register.step4.tutorLocationSubtitle")}
           />
-          <datalist id="tutor-cities">
-            {(TUTOR_LOCATION_COUNTRIES.find((c) => c.id === "kz")?.cities ?? []).map(
-              (city) => (
-                <option key={city} value={city.replaceAll("_", " ")} />
-              ),
-            )}
-          </datalist>
+          <CountryCityPicker
+            countryId={draft.countryId}
+            cityId={draft.cityId}
+            customCountry={draft.customCountry}
+            customCity={draft.customCity}
+            onCountryChange={(countryId) =>
+              setDraft((d) => ({ ...d, countryId, cityId: "", customCity: "" }))
+            }
+            onCityChange={(cityId) => setDraft((d) => ({ ...d, cityId }))}
+            onCustomCountryChange={(customCountry) =>
+              setDraft((d) => ({ ...d, customCountry }))
+            }
+            onCustomCityChange={(customCity) => setDraft((d) => ({ ...d, customCity }))}
+          />
           <StepNavigation
             onBack={() => go("name", "back")}
             onContinue={async () => {
+              if (
+                !isLocationComplete(
+                  draft.countryId,
+                  draft.cityId,
+                  draft.customCountry,
+                  draft.customCity,
+                )
+              ) {
+                return
+              }
+              const labels = resolveLocationLabels(
+                draft.countryId as CountryId,
+                draft.cityId,
+                draft.customCity,
+                draft.customCountry,
+              )
               setLoading(true)
               try {
                 await persistProfile({
-                  country: "kz",
-                  city: draft.city.trim(),
+                  country: labels.country,
+                  city: labels.city,
                 })
+                setDraft((d) => ({ ...d, city: labels.city }))
                 go("photo")
               } catch {
                 setError("Could not save")
@@ -501,7 +548,14 @@ export function TutorSignupFlow({ initialStep = "account" }: Props) {
             }}
             loading={loading}
             continueLabel={loading ? "Saving…" : "Continue"}
-            continueDisabled={!draft.city.trim()}
+            continueDisabled={
+              !isLocationComplete(
+                draft.countryId,
+                draft.cityId,
+                draft.customCountry,
+                draft.customCity,
+              )
+            }
           />
         </div>
       ) : null}
@@ -705,8 +759,9 @@ export function TutorSignupFlow({ initialStep = "account" }: Props) {
               try {
                 await persistProfile({
                   experienceYears: draft.experienceYears,
-                  education: draft.education.trim() || "Tutor",
-                  languages: ["english"],
+                  ...(draft.education.trim()
+                    ? { education: draft.education.trim() }
+                    : {}),
                 })
                 go("headline")
               } catch {
@@ -724,8 +779,6 @@ export function TutorSignupFlow({ initialStep = "account" }: Props) {
                   try {
                     await persistProfile({
                       experienceYears: draft.experienceYears,
-                      education: "Tutor",
-                      languages: ["english"],
                     })
                     go("headline")
                   } finally {
@@ -749,10 +802,12 @@ export function TutorSignupFlow({ initialStep = "account" }: Props) {
           />
           <FormField
             label="Headline"
+            hint={`${draft.headline.length}/120 · at least 10 characters`}
             inputProps={{
               id: "tutor-headline",
               value: draft.headline,
               onChange: (e) => setDraft((d) => ({ ...d, headline: e.target.value })),
+              maxLength: 120,
             }}
           />
           <StepNavigation
@@ -819,17 +874,22 @@ export function TutorSignupFlow({ initialStep = "account" }: Props) {
               type: "number",
               min: 1000,
               step: 500,
-              value: draft.hourlyRateAmount,
+              value: draft.hourlyRateAmount || "",
+              placeholder: "6000",
               onChange: (e) =>
                 setDraft((d) => ({
                   ...d,
-                  hourlyRateAmount: Number(e.target.value),
+                  hourlyRateAmount: Number(e.target.value) || 0,
                 })),
             }}
           />
           <StepNavigation
             onBack={() => go("about", "back")}
             onContinue={async () => {
+              if (draft.hourlyRateAmount < 1000) {
+                setError("Enter your hourly rate")
+                return
+              }
               setLoading(true)
               try {
                 await persistProfile({

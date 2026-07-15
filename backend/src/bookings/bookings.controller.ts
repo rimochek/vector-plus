@@ -16,6 +16,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthUser } from '../common/decorators/current-user.decorator';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { CancelBookingDto } from './dto/cancel-booking.dto';
+import { RescheduleBookingDto } from './dto/reschedule-booking.dto';
 
 @Controller('bookings')
 @UseGuards(JwtAuthGuard)
@@ -72,5 +73,16 @@ export class BookingsController {
     @Body() dto: CancelBookingDto,
   ) {
     return this.bookingsService.cancelBooking(user, id, dto);
+  }
+
+  @Patch(':id/reschedule')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.STUDENT)
+  rescheduleBooking(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: RescheduleBookingDto,
+  ) {
+    return this.bookingsService.rescheduleBooking(user, id, dto);
   }
 }
