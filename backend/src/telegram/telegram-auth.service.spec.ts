@@ -12,6 +12,7 @@ describe('TelegramAuthService', () => {
     const values = new URLSearchParams({
       auth_date: String(authDate),
       query_id: 'query-1',
+      signature: 'telegram-ed25519-signature',
       user: JSON.stringify({ id: 123, first_name: 'Aida' }),
     });
     const fields: string[] = [];

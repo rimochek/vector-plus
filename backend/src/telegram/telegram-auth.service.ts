@@ -33,7 +33,10 @@ export class TelegramAuthService {
 
     const fields: string[] = [];
     params.forEach((value, key) => {
-      if (key !== 'hash' && key !== 'signature') fields.push(`${key}=${value}`);
+      // Bot-token HMAC covers every received field except the hash itself.
+      // Excluding `signature` only applies to Telegram's separate Ed25519
+      // third-party verification algorithm.
+      if (key !== 'hash') fields.push(`${key}=${value}`);
     });
     fields.sort();
     const secret = createHmac('sha256', 'WebAppData').update(token).digest();
