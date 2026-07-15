@@ -3,6 +3,7 @@ import {
   Post,
   Body,
   Get,
+  Delete,
   Headers,
   UnauthorizedException,
   Req,
@@ -11,8 +12,6 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
-import { CreateUserDto } from './dto/create-user.dto';
-import { LoginDto } from './dto/login.dto';
 import { GoogleAuthDto, GoogleLinkDto } from './dto/google-auth.dto';
 import { JwtService } from '@nestjs/jwt';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -23,65 +22,45 @@ import {
   clearRefreshTokenCookie,
   setRefreshTokenCookie,
 } from './auth-cookies';
+import { RateLimitService } from '../common/services/rate-limit.service';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private authService: AuthService,
     private jwtService: JwtService,
+    private rateLimit: RateLimitService,
   ) {}
 
-  @Post('signup')
-  async signup(
-    @Body() createUserDto: CreateUserDto,
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    const result = await this.authService.signup(createUserDto);
-    setRefreshTokenCookie(
-      res,
-      result.refreshToken,
-      result.refreshTokenMaxAgeMs,
-    );
-    const { refreshToken: _rt, refreshTokenMaxAgeMs: _ms, ...body } = result;
-    return body;
-  }
-
-  @Post('login')
-  async login(
-    @Body() loginDto: LoginDto,
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    const result = await this.authService.login(loginDto);
-    setRefreshTokenCookie(
-      res,
-      result.refreshToken,
-      result.refreshTokenMaxAgeMs,
-    );
-    const { refreshToken: _rt, refreshTokenMaxAgeMs: _ms, ...body } = result;
-    return body;
+  private limit(req: Request, action: string, identity?: string) {
+    const key = `${action}:${req.ip}:${identity?.trim().toLowerCase() ?? ''}`;
+    this.rateLimit.check(key, 10, 15 * 60 * 1000);
   }
 
   @Post('google')
   async googleAuth(
     @Body() dto: GoogleAuthDto,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
+    this.limit(req, 'google');
     const result = await this.authService.authenticateWithGoogle(dto);
     setRefreshTokenCookie(
       res,
       result.refreshToken,
       result.refreshTokenMaxAgeMs,
     );
-    const { refreshToken: _rt, refreshTokenMaxAgeMs: _ms, ...body } = result;
-    return body;
+    return {
+      message: result.message,
+      access_token: result.access_token,
+      existingAccount: result.existingAccount,
+      user: result.user,
+    };
   }
 
   @Post('google/link')
   @UseGuards(JwtAuthGuard)
-  async linkGoogle(
-    @CurrentUser() user: AuthUser,
-    @Body() dto: GoogleLinkDto,
-  ) {
+  async linkGoogle(@CurrentUser() user: AuthUser, @Body() dto: GoogleLinkDto) {
     return this.authService.linkGoogleAccount(user.id, dto.credential);
   }
 
@@ -113,6 +92,20 @@ export class AuthController {
     return { success: true };
   }
 
+  @Delete('me')
+  @UseGuards(JwtAuthGuard)
+  async deleteAccount(
+    @CurrentUser() user: AuthUser,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.deleteAccount(user.id);
+    const raw = req.cookies?.[REFRESH_COOKIE] as string | undefined;
+    await this.authService.revokeRefreshToken(raw);
+    clearRefreshTokenCookie(res);
+    return result;
+  }
+
   @Get('me')
   async me(@Headers('authorization') authorization: string) {
     if (!authorization) {
@@ -126,11 +119,11 @@ export class AuthController {
 
     const token = parts[1];
     try {
-      const payload: any = this.jwtService.verify(token);
+      const payload = this.jwtService.verify<{ id: string }>(token);
       const user = await this.authService.getCurrentUser(payload.id);
       if (!user) throw new UnauthorizedException('User not found');
       return { user };
-    } catch (err) {
+    } catch {
       throw new UnauthorizedException('Invalid token');
     }
   }

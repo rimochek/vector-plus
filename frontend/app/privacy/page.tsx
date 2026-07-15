@@ -40,6 +40,16 @@ export default function PrivacyPage() {
               including httpOnly refresh cookies for secure sign-in.
             </p>
             <p>
+              When you leave a request on a tutor profile, your contact details (Telegram
+              username or phone number) are shared with that tutor so they can respond
+              directly outside Tutora. Public contact buttons are shown only when a tutor
+              explicitly enables them.
+            </p>
+            <p>
+              Tutors must not misuse student contact information. Verification documents
+              are never shown publicly. You may report spam or misuse to support.
+            </p>
+            <p>
               You may request account or data deletion by contacting support. Some
               records may be retained where needed for security, fraud prevention, or
               legal obligations.

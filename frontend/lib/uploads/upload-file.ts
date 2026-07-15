@@ -1,5 +1,5 @@
 import { getApiUrl } from "@/lib/api"
-import { AUTH_FETCH_INIT } from "@/lib/auth-client"
+import { AUTH_FETCH_INIT, getAccessToken } from "@/lib/auth-client"
 
 export type PresignResponse = {
   uploadId: string
@@ -10,8 +10,7 @@ export type PresignResponse = {
 export type UploadProgressHandler = (percent: number) => void
 
 function authHeaders(): Record<string, string> {
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("token") : null
+  const token = getAccessToken()
   return {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),

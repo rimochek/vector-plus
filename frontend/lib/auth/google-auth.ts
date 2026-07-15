@@ -1,6 +1,7 @@
 import { getApiUrl } from "@/lib/api"
 import {
   AUTH_FETCH_INIT,
+  getAccessToken,
   saveAuthSession,
   type StoredUser,
 } from "@/lib/auth-client"
@@ -14,6 +15,7 @@ export type GoogleAuthResponse = {
   access_token: string
   user: StoredUser
   message?: string
+  existingAccount?: boolean
 }
 
 export class GoogleAuthError extends Error {
@@ -60,7 +62,7 @@ export async function authenticateWithGoogle(
 }
 
 export async function linkGoogleAccount(credential: string): Promise<void> {
-  const token = localStorage.getItem("token")
+  const token = getAccessToken()
   const res = await fetch(`${getApiUrl()}/auth/google/link`, {
     method: "POST",
     headers: {

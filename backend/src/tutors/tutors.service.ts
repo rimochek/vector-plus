@@ -4,6 +4,7 @@ import {
   AvailabilityRuleType,
   LessonStatus,
   TutorApplicationStatus,
+  VerificationStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from '../common/decorators/current-user.decorator';
@@ -13,6 +14,10 @@ import {
   parseTeachingFormatQuery,
   tutorMatchesTeachingFormatFilters,
 } from '../common/utils/tutor-lesson-formats.util';
+import {
+  normalizePhoneNumber,
+  normalizeTelegramUsername,
+} from '../common/utils/contact.util';
 import { serializeVerificationDocument } from '../storage/verification-document.constants';
 
 type UploadedFilePayload = {
@@ -41,8 +46,12 @@ export class TutorsService {
 
     const tutors = await this.prisma.tutorProfile.findMany({
       where: {
-        isAcceptingStudents: true,
-        applicationStatus: TutorApplicationStatus.APPROVED,
+        OR: [
+          {
+            applicationStatus: TutorApplicationStatus.APPROVED,
+            isAcceptingStudents: true,
+          },
+        ],
         ...(excludeTutorProfileId
           ? { id: { not: excludeTutorProfileId } }
           : {}),
@@ -52,6 +61,7 @@ export class TutorsService {
         subjects: { include: { subject: true }, take: 3 },
       },
       orderBy: [{ ratingAvg: 'desc' }, { lessonsCompleted: 'desc' }],
+      take: 100,
     });
 
     const selectedFormats = parseTeachingFormatQuery(formatsQuery);
@@ -82,6 +92,10 @@ export class TutorsService {
       include: {
         user: { select: { id: true, timezone: true } },
         subjects: { include: { subject: true } },
+        verificationDocuments: {
+          where: { status: 'VERIFIED' },
+          orderBy: { uploadedAt: 'desc' },
+        },
       },
     });
 
@@ -99,7 +113,7 @@ export class TutorsService {
 
     await this.recordProfileView(tutorProfileId, tutor.userId, viewContext);
 
-    return this.serializeTutor(tutor, true);
+    return this.serializeTutor(tutor, isSelf ? 'owner' : 'public');
   }
 
   async getOwnProfile(user: AuthUser) {
@@ -116,7 +130,7 @@ export class TutorsService {
       throw new NotFoundException('Tutor profile not found');
     }
 
-    return this.serializeTutor(tutor, true);
+    return this.serializeTutor(tutor, 'owner');
   }
 
   async updateOwnProfile(user: AuthUser, dto: UpdateTutorProfileDto) {
@@ -175,6 +189,32 @@ export class TutorsService {
         dto.lessonFormats !== undefined
           ? { searchDocument }
           : {}),
+        ...(dto.preferredContactMethod !== undefined
+          ? { preferredContactMethod: dto.preferredContactMethod }
+          : {}),
+        ...(dto.phone !== undefined
+          ? {
+              phone: dto.phone.trim()
+                ? normalizePhoneNumber(dto.phone)
+                : null,
+            }
+          : {}),
+        ...(dto.telegramUsername !== undefined
+          ? {
+              telegramUsername: dto.telegramUsername.trim()
+                ? normalizeTelegramUsername(dto.telegramUsername)
+                : null,
+            }
+          : {}),
+        ...(dto.showTelegramPublicly !== undefined
+          ? { showTelegramPublicly: dto.showTelegramPublicly }
+          : {}),
+        ...(dto.showPhonePublicly !== undefined
+          ? { showPhonePublicly: dto.showPhonePublicly }
+          : {}),
+        ...(dto.acceptsDirectRequests !== undefined
+          ? { acceptsDirectRequests: dto.acceptsDirectRequests }
+          : {}),
       },
       include: {
         user: { select: { id: true, timezone: true } },
@@ -182,7 +222,7 @@ export class TutorsService {
       },
     });
 
-    return this.serializeTutor(updated, true);
+    return this.serializeTutor(updated, 'owner');
   }
 
   async uploadAvatar(_user: AuthUser, _file: UploadedFilePayload) {
@@ -239,10 +279,11 @@ export class TutorsService {
 
     if (
       tutor.applicationStatus === TutorApplicationStatus.SUBMITTED ||
-      tutor.applicationStatus === TutorApplicationStatus.UNDER_REVIEW
+      tutor.applicationStatus === TutorApplicationStatus.UNDER_REVIEW ||
+      tutor.applicationStatus === TutorApplicationStatus.APPROVED
     ) {
       throw new BadRequestException(
-        'Your application is already submitted and awaiting review',
+        'Your application is already submitted',
       );
     }
 
@@ -252,10 +293,12 @@ export class TutorsService {
     const updated = await this.prisma.tutorProfile.update({
       where: { id: tutor.id },
       data: {
-        applicationStatus: TutorApplicationStatus.SUBMITTED,
-        verificationStatus: 'PENDING',
+        // List in the marketplace immediately after registration.
+        // Verified badge is granted separately by admin review.
+        applicationStatus: TutorApplicationStatus.APPROVED,
+        verificationStatus: VerificationStatus.UNVERIFIED,
         bio: tutor.bio.trim(),
-        isAcceptingStudents: false,
+        isAcceptingStudents: true,
         applicationSubmittedAt: new Date(),
         applicationRejectionReason: isResubmit ? null : undefined,
         applicationReviewedAt: isResubmit ? null : undefined,
@@ -268,7 +311,7 @@ export class TutorsService {
       },
     });
 
-    return this.serializeTutor(updated, true);
+    return this.serializeTutor(updated, 'owner');
   }
 
   async getDashboardOverview(user: AuthUser) {
@@ -688,7 +731,7 @@ export class TutorsService {
         hourlyRateCents: number;
       }>;
     },
-    detailed = false,
+    visibility: 'public' | 'owner' = 'public',
   ) {
     const primarySubject = tutor.subjects[0]?.subject.name ?? 'General';
     const metadata = this.parseProfileMetadata(tutor.searchDocument ?? null);
@@ -752,6 +795,15 @@ export class TutorsService {
           )
         : metadata.verificationDocuments;
 
+    const contactFields = tutor as {
+      acceptsDirectRequests?: boolean;
+      preferredContactMethod?: string | null;
+      showTelegramPublicly?: boolean;
+      showPhonePublicly?: boolean;
+      telegramUsername?: string | null;
+      phone?: string | null;
+    };
+
     return {
       id: tutor.id,
       userId: tutor.userId,
@@ -762,7 +814,8 @@ export class TutorsService {
       subject: primarySubject,
       tags: tagLabels,
       credentials: metadata.credentials,
-      verificationDocuments: detailed ? dbVerificationDocuments : undefined,
+      verificationDocuments:
+        visibility === 'owner' ? dbVerificationDocuments : undefined,
       languages: metadata.languages,
       occupation: metadata.occupation,
       lessonFormats: metadata.lessonFormats,
@@ -799,7 +852,25 @@ export class TutorsService {
       city: tutor.city,
       verified: tutor.verificationStatus === 'VERIFIED',
       timezone: tutor.user.timezone,
-      ...(detailed ? { fullBio: tutor.bio } : {}),
+      acceptsDirectRequests: contactFields.acceptsDirectRequests ?? true,
+      preferredContactMethod: contactFields.preferredContactMethod ?? null,
+      publicTelegramUsername:
+        contactFields.showTelegramPublicly && contactFields.telegramUsername
+          ? contactFields.telegramUsername
+          : undefined,
+      publicPhone:
+        contactFields.showPhonePublicly && contactFields.phone
+          ? contactFields.phone
+          : undefined,
+      ...(visibility === 'owner'
+        ? {
+            fullBio: tutor.bio,
+            phone: contactFields.phone ?? null,
+            telegramUsername: contactFields.telegramUsername ?? null,
+            showTelegramPublicly: contactFields.showTelegramPublicly ?? false,
+            showPhonePublicly: contactFields.showPhonePublicly ?? false,
+          }
+        : {}),
     };
   }
 }

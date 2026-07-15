@@ -6,7 +6,9 @@ import { useParams, useRouter } from "next/navigation"
 import {
   Award,
   BookOpen,
+  Briefcase,
   CheckCircle,
+  FileText,
   Globe,
   GraduationCap,
   Loader2,
@@ -18,10 +20,11 @@ import {
 } from "lucide-react"
 import { useTranslations } from "@/lib/i18n/locale-context"
 import type { MessageId } from "@/lib/i18n/messages"
-import { api, type ApiTutor } from "@/lib/api-client"
+import { api, type ApiTutor, type AvailabilitySlot } from "@/lib/api-client"
 import { isLoggedIn, getStoredUser } from "@/lib/auth-client"
 import { studentSignupPath } from "@/lib/guest-auth"
-import { TutorBookingSidebar } from "@/app/components/tutor-booking-sidebar"
+import { TutorContactSidebar } from "@/app/components/tutor-contact-sidebar"
+import { TutorAvailabilitySlots } from "@/app/components/tutor-availability-slots"
 import { Container } from "@/app/components/ui/container"
 import { Badge } from "@/app/components/ui/badge"
 import { LEARNING_TOPIC_IDS, LEGACY_TOPIC_IDS, topicLabelId } from "@/app/components/tutors-data"
@@ -31,7 +34,7 @@ import {
   type TutorLessonFormat,
 } from "@/lib/tutor-lesson-formats"
 
-type ProfileTab = "about" | "subjects" | "reviews" | "availability" | "education"
+type ProfileTab = "about" | "reviews" | "availability"
 
 function tagLabelId(id: string): MessageId | null {
   if (
@@ -66,16 +69,6 @@ function splitBio(bio: string) {
   return { body: bio.trim(), highlight: null as string | null }
 }
 
-function reviewDistribution(rating: number, total: number) {
-  if (total <= 0) return [0, 0, 0, 0, 0]
-  const weights = [5, 4, 3, 2, 1].map((stars) => {
-    const distance = Math.abs(stars - rating)
-    return Math.max(0.05, 1.4 - distance * 0.45)
-  })
-  const sum = weights.reduce((acc, value) => acc + value, 0)
-  return weights.map((weight) => Math.round((weight / sum) * total))
-}
-
 function MetricCard({
   icon: Icon,
   value,
@@ -98,28 +91,30 @@ function MetricCard({
   )
 }
 
-export function TutorProfile() {
+export function TutorProfile({ initialTutor = null }: { initialTutor?: ApiTutor | null }) {
   const { t } = useTranslations()
   const params = useParams()
   const router = useRouter()
   const tutorId = params.id as string
-  const [tutor, setTutor] = useState<ApiTutor | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [tutor, setTutor] = useState<ApiTutor | null>(initialTutor)
+  const [loading, setLoading] = useState(!initialTutor)
   const [favorited, setFavorited] = useState(false)
   const [favoriteLoading, setFavoriteLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<ProfileTab>("about")
+  const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null)
 
   const user = getStoredUser()
   const isStudent = (user?.role ?? user?.roles?.[0]) === "student"
 
   useEffect(() => {
+    if (initialTutor?.id === tutorId) return
     api.tutors
       .get(tutorId)
       .then(setTutor)
       .catch(() => setError(t("tutorProfile.notFound")))
       .finally(() => setLoading(false))
-  }, [tutorId, t])
+  }, [initialTutor, tutorId, t])
 
   useEffect(() => {
     if (!isLoggedIn() || !isStudent) return
@@ -153,16 +148,26 @@ export function TutorProfile() {
     () =>
       [
         { id: "about" as const, label: t("tutorProfile.tab.about") },
-        { id: "subjects" as const, label: t("tutorProfile.tab.subjects") },
         {
           id: "reviews" as const,
           label: `${t("tutorProfile.tab.reviews")}${tutor ? ` (${tutor.reviews})` : ""}`,
         },
         { id: "availability" as const, label: t("tutorProfile.tab.availability") },
-        { id: "education" as const, label: t("tutorProfile.tab.education") },
       ] satisfies { id: ProfileTab; label: string }[],
     [t, tutor],
   )
+
+  const certificateItems = useMemo(() => {
+    if (!tutor) return []
+    const fromCredentials =
+      tutor.credentials?.map((item) => item.label || item.value).filter(Boolean) ?? []
+    const fromDocs =
+      tutor.verificationDocuments
+        ?.filter((doc) => doc.status === "VERIFIED" || !doc.status)
+        .map((doc) => doc.fileName)
+        .filter(Boolean) ?? []
+    return [...fromCredentials, ...fromDocs]
+  }, [tutor])
 
   if (loading) {
     return (
@@ -197,7 +202,6 @@ export function TutorProfile() {
       : tutor.subjects?.map((subject) => subject.name) ?? [tutor.subject]
   const { body: bioBody, highlight } = splitBio(tutor.bio)
   const satisfaction = tutor.rating > 0 ? Math.round((tutor.rating / 5) * 100) : null
-  const distribution = reviewDistribution(tutor.rating, tutor.reviews)
   const firstName = tutor.displayName.split(" ")[0] ?? tutor.displayName
   const lessonFormats = normalizeLessonFormats(tutor.lessonFormats)
   const formatLabel = lessonFormatLabel(lessonFormats, t)
@@ -208,12 +212,13 @@ export function TutorProfile() {
     <div className="overflow-x-clip bg-[var(--background)] pb-10 pt-4 sm:pb-16 sm:pt-6">
       <Container size="content" className="min-w-0">
         <div className="grid min-w-0 w-full gap-6 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start xl:gap-8">
-          <TutorBookingSidebar
+          <TutorContactSidebar
             className="order-1 min-w-0 w-full xl:order-2"
             tutor={tutor}
             favorited={favorited}
             favoriteLoading={favoriteLoading}
             onToggleFavorite={toggleFavorite}
+            preferredSlot={selectedSlot}
           />
 
           <div className="order-2 min-w-0 w-full space-y-4 sm:space-y-6 xl:order-1">
@@ -255,6 +260,14 @@ export function TutorProfile() {
                           {t("tutorProfile.verified")}
                         </Badge>
                       )}
+                      {tutor.experienceYears != null && tutor.experienceYears > 0 && (
+                        <Badge tone="muted" className="gap-1">
+                          <Briefcase className="h-3.5 w-3.5" />
+                          {t("tutorProfile.experienceYears", {
+                            count: tutor.experienceYears,
+                          })}
+                        </Badge>
+                      )}
                     </div>
 
                     <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-medium text-[var(--text-secondary)]">
@@ -281,7 +294,7 @@ export function TutorProfile() {
                   <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-[var(--text-muted)]">
                     <span className="inline-flex items-center gap-2">
                       <GraduationCap className="h-4 w-4 text-[var(--primary)]" />
-                      {tutor.subject}
+                      {tutor.education?.trim() || tutor.subject}
                     </span>
                     {location && (
                       <span className="inline-flex items-center gap-2">
@@ -380,7 +393,7 @@ export function TutorProfile() {
                       />
                       <MetricCard
                         icon={Users}
-                        value={`${Math.max(tutor.reviews, Math.round(tutor.lessonsCompleted * 0.35))}+`}
+                        value={tutor.reviews > 0 ? `${tutor.reviews}` : "—"}
                         label={t("tutorProfile.happyStudents")}
                       />
                       <MetricCard
@@ -411,6 +424,29 @@ export function TutorProfile() {
                         </div>
                       </section>
                     )}
+
+                    <section className="space-y-3 border-b border-[var(--border)] pb-10">
+                      <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                        {t("tutorProfile.certificates")}
+                      </h3>
+                      {certificateItems.length > 0 ? (
+                        <ul className="space-y-2">
+                          {certificateItems.map((item) => (
+                            <li
+                              key={item}
+                              className="flex items-center gap-2 rounded-[var(--radius-card)] border border-[var(--border)] px-4 py-3 text-sm text-[var(--text-secondary)]"
+                            >
+                              <FileText className="h-4 w-4 shrink-0 text-[var(--primary)]" />
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-sm text-[var(--text-muted)]">
+                          {t("tutorProfile.certificatesEmpty")}
+                        </p>
+                      )}
+                    </section>
 
                     <section className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_280px]">
                       <div className="min-w-0 space-y-4">
@@ -443,58 +479,11 @@ export function TutorProfile() {
                             ))}
                           </div>
                         </div>
-                        <div className="mt-5 space-y-2">
-                          {[5, 4, 3, 2, 1].map((stars, index) => {
-                            const count = distribution[4 - index] ?? 0
-                            const width =
-                              tutor.reviews > 0 ? Math.max(4, (count / tutor.reviews) * 100) : 0
-                            return (
-                              <div key={stars} className="flex items-center gap-2 text-xs">
-                                <span className="w-3 text-[var(--text-muted)]">{stars}</span>
-                                <div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--border)]">
-                                  <div
-                                    className="h-full rounded-full bg-[var(--primary)]"
-                                    style={{ width: `${width}%` }}
-                                  />
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
+                        <p className="mt-4 text-xs leading-relaxed text-[var(--text-muted)]">
+                          {t("tutorProfile.noReviewsYet")}
+                        </p>
                       </div>
                     </section>
-                  </div>
-                )}
-
-                {activeTab === "subjects" && (
-                  <div className="space-y-4">
-                    <h2 className="text-xl font-bold text-[var(--text-primary)]">
-                      {t("tutorProfile.tab.subjects")}
-                    </h2>
-                    <div className="flex flex-wrap gap-2">
-                      {subjectTags.map((tag) => {
-                        const labelId = tagLabelId(tag)
-                        return (
-                          <Badge key={tag} tone="muted" className="px-4 py-2 text-sm">
-                            {labelId ? t(labelId) : tag}
-                          </Badge>
-                        )
-                      })}
-                    </div>
-                    {tutor.subjects && tutor.subjects.length > 0 && (
-                      <ul className="space-y-3 pt-2">
-                        {tutor.subjects.map((subject) => (
-                          <li
-                            key={subject.id}
-                            className="flex items-center justify-between rounded-[var(--radius-card)] border border-[var(--border)] px-4 py-3"
-                          >
-                            <span className="font-semibold text-[var(--text-primary)]">
-                              {subject.name}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
                   </div>
                 )}
 
@@ -520,30 +509,18 @@ export function TutorProfile() {
                 )}
 
                 {activeTab === "availability" && (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     <h2 className="text-xl font-bold text-[var(--text-primary)]">
                       {t("tutorProfile.tab.availability")}
                     </h2>
                     <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
                       {t("tutorProfile.availabilityHint")}
                     </p>
-                  </div>
-                )}
-
-                {activeTab === "education" && (
-                  <div className="space-y-4">
-                    <h2 className="text-xl font-bold text-[var(--text-primary)]">
-                      {t("tutorProfile.tab.education")}
-                    </h2>
-                    {tutor.education ? (
-                      <p className="whitespace-pre-line text-base leading-relaxed text-[var(--text-secondary)]">
-                        {tutor.education}
-                      </p>
-                    ) : (
-                      <p className="text-sm text-[var(--text-muted)]">
-                        {t("tutorProfile.educationEmpty")}
-                      </p>
-                    )}
+                    <TutorAvailabilitySlots
+                      tutorId={tutor.id}
+                      selectedSlotId={selectedSlot?.id ?? null}
+                      onSelectSlot={setSelectedSlot}
+                    />
                   </div>
                 )}
               </div>

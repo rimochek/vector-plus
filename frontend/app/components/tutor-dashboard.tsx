@@ -46,6 +46,7 @@ import { StickySidebar } from "@/app/components/ui/sticky-sidebar"
 import { Button, ButtonLink } from "@/app/components/ui/button"
 import { EmptyState } from "@/app/components/ui/empty-state"
 import { DashboardProfileMenu } from "@/app/components/dashboard-profile-menu"
+import { AccountSettingsPanel } from "@/app/components/account-settings-panel"
 import { useLiveDashboardFeed } from "@/lib/use-live-dashboard-feed"
 import { TutorProfileEditor } from "@/app/components/tutor-profile-editor"
 import { TutorApplicationStatusBanner } from "@/app/components/tutor-application-status-banner"
@@ -1091,14 +1092,11 @@ export function TutorDashboard() {
           )}
 
           {tab === "settings" && (
-            <DashboardCard className="p-8 text-center">
-              <Settings className="mx-auto mb-4 h-12 w-12 rounded-2xl bg-[var(--surface-secondary)] p-3 text-[var(--text-muted)]" />
-              <h2 className="text-xl font-bold text-[var(--text-primary)]">
+            <DashboardCard className="p-6">
+              <h2 className="mb-6 text-xl font-bold text-[var(--text-primary)]">
                 {t("tutorDash.nav.settings")}
               </h2>
-              <p className="mt-2 text-sm text-[var(--text-muted)]">
-                {t("tutorDash.settingsHint")}
-              </p>
+              <AccountSettingsPanel />
             </DashboardCard>
           )}
           </div>

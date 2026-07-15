@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react"
 import {
   authenticateWithGoogle,
   GoogleAuthError,
+  type GoogleAuthResponse,
 } from "@/lib/auth/google-auth"
 import { getDefaultRouteForUser } from "@/lib/auth-client"
 import { useRouter } from "next/navigation"
@@ -28,7 +29,7 @@ declare global {
 
 type GoogleSignInButtonProps = {
   intendedRole?: "STUDENT" | "TUTOR"
-  onSuccess?: () => void
+  onSuccess?: (data: GoogleAuthResponse) => void
   onError?: (message: string) => void
   className?: string
   redirectAfterSuccess?: boolean
@@ -90,7 +91,7 @@ export function GoogleSignInButton({
           credential,
           intendedRole,
         })
-        onSuccess?.()
+        onSuccess?.(data)
         if (redirectAfterSuccess) {
           router.push(getDefaultRouteForUser(data.user))
         }

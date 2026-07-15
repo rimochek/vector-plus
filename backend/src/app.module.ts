@@ -16,6 +16,9 @@ import { StudentsModule } from './students/students.module';
 import { StorageModule } from './storage/storage.module';
 import { AdminModule } from './admin/admin.module';
 import { EnvValidationService } from './config/env-validation.service';
+import { LeadsModule } from './leads/leads.module';
+import { PublicModule } from './public/public.module';
+import { TelegramModule } from './telegram/telegram.module';
 
 function rootEnvFilePaths(): string[] {
   const candidates = [
@@ -42,6 +45,9 @@ function rootEnvFilePaths(): string[] {
     NotificationsModule,
     StorageModule,
     AdminModule,
+    LeadsModule,
+    PublicModule,
+    TelegramModule,
   ],
   controllers: [AppController],
   providers: [AppService, EnvValidationService],

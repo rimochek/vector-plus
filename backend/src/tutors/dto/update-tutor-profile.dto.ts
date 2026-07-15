@@ -1,14 +1,18 @@
 import {
   IsArray,
+  IsBoolean,
+  IsEnum,
   IsInt,
   IsOptional,
   IsString,
   IsUrl,
   Max,
+  MaxLength,
   Min,
   MinLength,
   ValidateIf,
 } from 'class-validator';
+import { ContactMethod } from '@prisma/client';
 
 export class UpdateTutorProfileDto {
   @IsOptional()
@@ -83,4 +87,30 @@ export class UpdateTutorProfileDto {
   @IsArray()
   @IsString({ each: true })
   lessonFormats?: ('online' | 'offline')[];
+
+  @IsOptional()
+  @IsEnum(ContactMethod)
+  preferredContactMethod?: ContactMethod;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  telegramUsername?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  showTelegramPublicly?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  showPhonePublicly?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  acceptsDirectRequests?: boolean;
 }

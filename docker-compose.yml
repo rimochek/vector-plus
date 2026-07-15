@@ -25,6 +25,18 @@ services:
       - .env
     ports:
       - "5000:5000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:5000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - vector_network
 
@@ -34,12 +46,17 @@ services:
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5000}
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
+        NEXT_PUBLIC_TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
     container_name: vector_frontend
     restart: always
     depends_on:
       - backend
     env_file:
       - .env
+    environment:
+      # Used by Next.js Server Components inside the Docker network.
+      # Browser requests continue to use NEXT_PUBLIC_API_URL.
+      SERVER_API_URL: http://backend:5000
     ports:
       - "3000:3000"
     networks:

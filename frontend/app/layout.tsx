@@ -1,15 +1,10 @@
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+import Script from "next/script"
 import "./globals.css"
 import { Providers } from "./providers"
 
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-  display: "swap",
-})
-
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
   title: "Tutora — Find your perfect tutor",
   description:
     "Modern tutoring marketplace. Find verified tutors, book lessons, and learn with confidence.",
@@ -28,10 +23,11 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${inter.variable} light h-full max-w-[100vw] antialiased`}
+      className="light h-full max-w-[100vw] antialiased"
     >
       <body className="flex min-h-full max-w-[100vw] flex-col bg-[var(--bg)] text-[var(--text-primary)]">
         <Providers>{children}</Providers>
+        <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
       </body>
     </html>
   )

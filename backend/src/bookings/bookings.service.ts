@@ -21,6 +21,7 @@ import {
   STUDENT_CANCEL_REASONS,
   TUTOR_CANCEL_REASONS,
 } from './dto/cancel-booking.dto';
+import { RescheduleBookingDto } from './dto/reschedule-booking.dto';
 import { parseLearningGoals } from '../common/learning-goals.util';
 
 export type BookingViewStatus = 'upcoming' | 'completed' | 'cancelled' | 'pending';
@@ -188,8 +189,121 @@ export class BookingsService {
       subject: result.lesson.subject?.name ?? 'General',
       studentMessage: dto.studentMessage?.trim() || null,
     });
+    await this.notificationsService.notifyLessonRequestCreated({
+      studentUserId: user.id,
+      tutorName: result.lesson.tutorProfile.displayName,
+      lessonId: result.lesson.id,
+      scheduledStartAt: result.slotStart,
+      subject: result.lesson.subject?.name ?? 'General',
+    });
 
     return this.serializeBooking(result.lesson, 'student');
+  }
+
+  async rescheduleBooking(
+    user: AuthUser,
+    bookingId: string,
+    dto: RescheduleBookingDto,
+  ) {
+    if (!user.roles.includes(UserRole.STUDENT)) {
+      throw new ForbiddenException('Only students can reschedule sessions');
+    }
+
+    const studentProfile = await this.prisma.studentProfile.findUnique({
+      where: { userId: user.id },
+    });
+    if (!studentProfile) {
+      throw new ForbiddenException('Student profile required');
+    }
+
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: bookingId },
+      include: {
+        studentProfile: true,
+        tutorProfile: true,
+        subject: true,
+        availabilitySlot: true,
+      },
+    });
+
+    if (!lesson || lesson.studentProfileId !== studentProfile.id) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    if (
+      lesson.status === LessonStatus.CANCELLED ||
+      lesson.status === LessonStatus.COMPLETED
+    ) {
+      throw new BadRequestException('This lesson cannot be rescheduled');
+    }
+
+    if (lesson.availabilitySlotId === dto.availabilitySlotId) {
+      throw new BadRequestException('Choose a different time slot');
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const newSlot = await tx.availabilitySlot.findUnique({
+        where: { id: dto.availabilitySlotId },
+        include: { lesson: true, tutorProfile: true },
+      });
+
+      if (
+        !newSlot ||
+        !newSlot.isAvailable ||
+        newSlot.lesson ||
+        newSlot.tutorProfileId !== lesson.tutorProfileId
+      ) {
+        throw new BadRequestException('Slot is no longer available');
+      }
+
+      const durationMinutes = Math.round(
+        (newSlot.endsAt.getTime() - newSlot.startsAt.getTime()) / 60000,
+      );
+
+      if (lesson.availabilitySlotId) {
+        await tx.availabilitySlot.update({
+          where: { id: lesson.availabilitySlotId },
+          data: { isAvailable: true },
+        });
+      }
+
+      await tx.availabilitySlot.update({
+        where: { id: newSlot.id },
+        data: { isAvailable: false },
+      });
+
+      const updated = await tx.lesson.update({
+        where: { id: bookingId },
+        data: {
+          availabilitySlotId: newSlot.id,
+          scheduledStartAt: newSlot.startsAt,
+          scheduledEndAt: newSlot.endsAt,
+          durationMinutes,
+          status: LessonStatus.PENDING_APPROVAL,
+          ...(dto.studentMessage !== undefined
+            ? { studentMessage: dto.studentMessage.trim() || null }
+            : {}),
+        },
+        include: {
+          studentProfile: true,
+          tutorProfile: true,
+          subject: true,
+        },
+      });
+
+      return { updated, slotStart: newSlot.startsAt };
+    });
+
+    await this.notificationsService.notifyLessonRequested({
+      tutorUserId: lesson.tutorProfile.userId,
+      studentName: studentProfile.displayName,
+      lessonId: lesson.id,
+      scheduledStartAt: result.slotStart,
+      subject: result.updated.subject?.name ?? 'General',
+      studentMessage: dto.studentMessage?.trim() || lesson.studentMessage,
+    });
+
+    return this.serializeBooking(result.updated, 'student');
   }
 
   async approveBooking(user: AuthUser, bookingId: string) {

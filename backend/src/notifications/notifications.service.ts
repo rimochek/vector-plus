@@ -5,10 +5,14 @@ import {
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { TelegramBotService } from '../telegram/telegram-bot.service';
 
 @Injectable()
 export class NotificationsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private telegram: TelegramBotService,
+  ) {}
 
   async listForUser(userId: string) {
     const items = await this.prisma.notification.findMany({
@@ -73,7 +77,7 @@ export class NotificationsService {
     body?: string,
     data?: Prisma.InputJsonValue,
   ) {
-    return this.prisma.notification.create({
+    const notification = await this.prisma.notification.create({
       data: {
         userId,
         channel: NotificationChannel.IN_APP,
@@ -84,6 +88,25 @@ export class NotificationsService {
         data,
       },
     });
+    void this.telegram
+      .sendToUser(
+        userId,
+        [title, body].filter(Boolean).join('\n\n'),
+        this.notificationPath(type, data),
+      )
+      .catch(() => undefined);
+    return notification;
+  }
+
+  private notificationPath(type: string, data?: Prisma.InputJsonValue) {
+    const value = data as
+      | { lessonId?: string; conversationId?: string }
+      | undefined;
+    if (value?.conversationId || type === 'chat.message')
+      return '/dashboard?tab=messages';
+    if (value?.lessonId || type.startsWith('lesson.'))
+      return '/dashboard?tab=lessons';
+    return '/dashboard';
   }
 
   async notifyLessonCancelled(params: {
@@ -144,6 +167,27 @@ export class NotificationsService {
       'lesson.requested',
       'New lesson request',
       `${params.studentName} requested a ${params.subject} lesson on ${when}.${note} Please approve or decline.`,
+      {
+        lessonId: params.lessonId,
+        scheduledStartAt: params.scheduledStartAt.toISOString(),
+        subject: params.subject,
+      },
+    );
+  }
+
+  async notifyLessonRequestCreated(params: {
+    studentUserId: string;
+    tutorName: string;
+    lessonId: string;
+    scheduledStartAt: Date;
+    subject: string;
+  }) {
+    const when = this.formatLessonWhen(params.scheduledStartAt);
+    return this.createInApp(
+      params.studentUserId,
+      'lesson.request-created',
+      'Lesson request sent',
+      `Your ${params.subject} request to ${params.tutorName} for ${when} was sent successfully.`,
       {
         lessonId: params.lessonId,
         scheduledStartAt: params.scheduledStartAt.toISOString(),

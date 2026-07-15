@@ -1,5 +1,5 @@
 import { getApiUrl } from "./api"
-import { handleSessionExpired, tryRefreshAccessToken, AUTH_FETCH_INIT } from "./auth-client"
+import { handleSessionExpired, tryRefreshAccessToken, AUTH_FETCH_INIT, getAccessToken } from "./auth-client"
 
 export class ApiError extends Error {
   constructor(
@@ -12,8 +12,7 @@ export class ApiError extends Error {
 }
 
 function getToken(): string | null {
-  if (typeof window === "undefined") return null
-  return localStorage.getItem("token")
+  return getAccessToken()
 }
 
 function shouldAttemptTokenRefresh(path: string): boolean {
@@ -112,6 +111,14 @@ export type ApiTutor = {
   languages?: string[]
   occupation?: string | null
   lessonFormats?: ("online" | "offline")[]
+  acceptsDirectRequests?: boolean
+  preferredContactMethod?: "TELEGRAM" | "PHONE" | "BOTH" | null
+  publicTelegramUsername?: string
+  publicPhone?: string
+  phone?: string | null
+  telegramUsername?: string | null
+  showTelegramPublicly?: boolean
+  showPhonePublicly?: boolean
 }
 
 export type UpdateTutorProfilePayload = {
@@ -134,6 +141,38 @@ export type UpdateTutorProfilePayload = {
   languages?: string[]
   occupation?: string
   lessonFormats?: ("online" | "offline")[]
+  preferredContactMethod?: "TELEGRAM" | "PHONE" | "BOTH"
+  phone?: string
+  telegramUsername?: string
+  showTelegramPublicly?: boolean
+  showPhonePublicly?: boolean
+  acceptsDirectRequests?: boolean
+}
+
+export type TutorLead = {
+  id: string
+  studentName: string
+  contactType: "TELEGRAM" | "PHONE"
+  contactValue: string
+  subject: string | null
+  goal: string | null
+  message: string | null
+  preferredTime: string | null
+  status: "NEW" | "VIEWED" | "CONTACTED" | "CLOSED" | "SPAM"
+  source: string
+  createdAt: string
+  viewedAt: string | null
+  contactedAt: string | null
+  closedAt: string | null
+}
+
+export type TutorLeadMetrics = {
+  profileViews: number
+  telegramClicks: number
+  phoneClicks: number
+  totalRequests: number
+  newRequests: number
+  profileViewsThisWeek: number
 }
 
 export type AvailabilitySlot = {
@@ -371,6 +410,17 @@ export type AdminTutorDetail = AdminTutorSummary & {
 }
 
 export const api = {
+  auth: {
+    changePassword: (currentPassword: string, newPassword: string) =>
+      apiFetch<{ success: boolean; message: string }>("/auth/password", {
+        method: "PATCH",
+        body: JSON.stringify({ currentPassword, newPassword }),
+      }),
+    deleteAccount: () =>
+      apiFetch<{ success: boolean; message: string }>("/auth/me", {
+        method: "DELETE",
+      }),
+  },
   tutors: {
     list: (formats?: string) =>
       apiFetch<ApiTutor[]>(
@@ -392,6 +442,50 @@ export const api = {
         `/availability/tutors/${tutorProfileId}/slots`,
       ),
   },
+  leads: {
+    submit: (
+      tutorId: string,
+      payload: {
+        studentName: string
+        contactType: "TELEGRAM" | "PHONE"
+        contactValue: string
+        subject?: string
+        goal?: string
+        message?: string
+        preferredTime?: string
+        website?: string
+      },
+    ) =>
+      apiFetch<{ success: boolean; message: string }>(
+        `/public/tutors/${tutorId}/leads`,
+        { method: "POST", body: JSON.stringify(payload) },
+      ),
+    trackTelegramClick: (tutorId: string) =>
+      apiFetch<{ success: boolean }>(`/public/tutors/${tutorId}/contact/telegram`, {
+        method: "POST",
+      }),
+    trackPhoneClick: (tutorId: string) =>
+      apiFetch<{ success: boolean }>(`/public/tutors/${tutorId}/contact/phone`, {
+        method: "POST",
+      }),
+    list: (params?: { status?: string; page?: number; limit?: number }) => {
+      const query = new URLSearchParams()
+      if (params?.status) query.set("status", params.status)
+      if (params?.page) query.set("page", String(params.page))
+      if (params?.limit) query.set("limit", String(params.limit))
+      const suffix = query.toString() ? `?${query.toString()}` : ""
+      return apiFetch<{ items: TutorLead[]; total: number; page: number; limit: number }>(
+        `/tutors/me/leads${suffix}`,
+      )
+    },
+    get: (leadId: string) => apiFetch<TutorLead>(`/tutors/me/leads/${leadId}`),
+    updateStatus: (leadId: string, status: TutorLead["status"]) =>
+      apiFetch<TutorLead>(`/tutors/me/leads/${leadId}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      }),
+    metrics: () => apiFetch<TutorLeadMetrics>("/tutors/me/leads/metrics"),
+  },
   bookings: {
     create: (availabilitySlotId: string, studentMessage?: string) =>
       apiFetch<Booking>("/bookings", {
@@ -410,6 +504,11 @@ export const api = {
       apiFetch<Booking>(`/bookings/${id}/approve`, { method: "PATCH" }),
     reject: (id: string) =>
       apiFetch<Booking>(`/bookings/${id}/reject`, { method: "PATCH" }),
+    reschedule: (id: string, availabilitySlotId: string, studentMessage?: string) =>
+      apiFetch<Booking>(`/bookings/${id}/reschedule`, {
+        method: "PATCH",
+        body: JSON.stringify({ availabilitySlotId, studentMessage }),
+      }),
   },
   notifications: {
     list: () => apiFetch<AppNotification[]>("/notifications"),
