@@ -333,8 +333,8 @@ export const messagesEn = {
   "tutorDash.viewAllMessages": "View all messages",
   "tutorDash.referTitle": "Refer a colleague",
   "tutorDash.referDesc": "Invite tutors and help more students learn.",
-  "tutorDash.boostTitle": "Boost your profile",
-  "tutorDash.boostDesc": "Complete your profile to get more views and lessons.",
+  "tutorDash.boostTitle": "Add your contacts",
+  "tutorDash.boostDesc": "Add contact options to your public profile so students can reach you.",
   "tutorDash.sidebarProfileTitle": "Earn more. Teach more.",
   "tutorDash.sidebarProfileDesc":
     "Complete your profile and get discovered by more students.",
@@ -1252,8 +1252,8 @@ export const messagesRu: Record<MessageId, string> = {
   "tutorDash.viewAllMessages": "Все сообщения",
   "tutorDash.referTitle": "Пригласите коллегу",
   "tutorDash.referDesc": "Приглашайте репетиторов и помогайте большему числу учеников.",
-  "tutorDash.boostTitle": "Улучшите профиль",
-  "tutorDash.boostDesc": "Заполните профиль, чтобы получать больше просмотров и занятий.",
+  "tutorDash.boostTitle": "Добавьте контакты",
+  "tutorDash.boostDesc": "Добавьте контакты в публичный профиль, чтобы ученики могли связаться с вами.",
   "tutorDash.sidebarProfileTitle": "Зарабатывайте больше. Учите больше.",
   "tutorDash.sidebarProfileDesc":
     "Заполните профиль, чтобы больше учеников находили вас.",

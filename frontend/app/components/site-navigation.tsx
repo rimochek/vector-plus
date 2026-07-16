@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -72,6 +73,7 @@ export const Navigation = ({ session }: NavigationProps) => {
   const router = useRouter();
   const { t, locale, setLocale } = useTranslations();
   const { darkMode, toggleTheme } = useStoredTheme();
+  const reduceMotion = useReducedMotion();
   const { user, isLoggedIn, ready } = session;
 
   const closeMenu = () => setIsOpen(false);
@@ -238,90 +240,136 @@ export const Navigation = ({ session }: NavigationProps) => {
       </Container>
 
       {mounted &&
-        isOpen &&
         createPortal(
-          <div
-            className="fixed inset-0 z-[200] lg:hidden"
-            role="dialog"
-            aria-modal
-          >
-            <button
-              type="button"
-              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-              onClick={closeMenu}
-              aria-label={t("nav.closeMenu")}
-            />
-            <div className="absolute inset-y-0 right-0 flex w-[min(100%,20rem)] flex-col border-l border-[var(--border)] bg-[var(--surface)] shadow-2xl">
-              <div className="flex h-[72px] items-center justify-between border-b border-[var(--border)] px-4">
-                <span className="text-sm font-bold text-[var(--text-muted)]">
-                  {t("nav.menu")}
-                </span>
-                <button type="button" onClick={closeMenu} className="p-2">
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-4">
-                {centerNav.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={closeMenu}
-                    className={`mb-1 block rounded-full px-4 py-3 text-sm font-semibold transition duration-150 ${
-                      isActive(item.href)
-                        ? "bg-[var(--primary-from)] text-white"
-                        : "text-[var(--text-secondary)] hover:bg-[var(--chip)]"
-                    }`}
-                  >
-                    {item.label}
-                  </Link>
-                ))}
-                {ready && !isLoggedIn && (
-                  <div className="mt-4 grid gap-2 border-t border-[var(--border)] pt-4">
-                    <Link
-                      href="/login"
-                      onClick={closeMenu}
-                      className="rounded-full px-4 py-3 text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--chip)]"
-                    >
-                      {t("nav.login")}
-                    </Link>
-                    <Link
-                      href="/signup"
-                      onClick={closeMenu}
-                      className="rounded-full bg-[var(--primary)] px-4 py-3 text-center text-sm font-semibold text-[var(--primary-foreground)]"
-                    >
-                      {t("nav.join")}
-                    </Link>
-                  </div>
-                )}
-                {ready && isLoggedIn && (
-                  <div className="mt-4 border-t border-[var(--border)] pt-4">
-                    {mobileAccountItems.map((item) => {
-                      const Icon = item.icon;
-                      return (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          onClick={closeMenu}
-                          className="mb-1 flex items-center gap-3 rounded-[var(--radius-button)] px-4 py-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:bg-[var(--chip)]"
-                        >
-                          <Icon className="h-4 w-4 shrink-0 text-[var(--primary)]" />
-                          {item.label}
-                        </Link>
-                      );
-                    })}
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      className="mt-2 flex w-full items-center gap-3 rounded-[var(--radius-button)] px-4 py-3 text-sm font-semibold text-red-600"
-                    >
-                      <LogOut className="h-4 w-4" />
-                      {t("nav.logout")}
+          <AnimatePresence initial={false}>
+            {isOpen ? (
+              <motion.div
+                className="fixed inset-0 z-[200] lg:hidden"
+                role="dialog"
+                aria-modal
+                initial={{ opacity: reduceMotion ? 1 : 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: reduceMotion ? 1 : 0 }}
+                transition={{ duration: reduceMotion ? 0 : 0.2 }}
+              >
+                <button
+                  type="button"
+                  className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                  onClick={closeMenu}
+                  aria-label={t("nav.closeMenu")}
+                />
+                <motion.div
+                  className="absolute inset-y-0 right-0 flex w-[min(100%,20rem)] flex-col border-l border-[var(--border)] bg-[var(--surface)] shadow-2xl"
+                  initial={{ x: reduceMotion ? 0 : "100%" }}
+                  animate={{ x: 0 }}
+                  exit={{ x: reduceMotion ? 0 : "100%" }}
+                  transition={{
+                    duration: reduceMotion ? 0 : 0.28,
+                    ease: [0.22, 1, 0.36, 1],
+                  }}
+                >
+                  <div className="flex h-[72px] items-center justify-between border-b border-[var(--border)] px-4">
+                    <span className="text-sm font-bold text-[var(--text-muted)]">
+                      {t("nav.menu")}
+                    </span>
+                    <button type="button" onClick={closeMenu} className="p-2">
+                      <X className="h-5 w-5" />
                     </button>
                   </div>
-                )}
-              </div>
-            </div>
-          </div>,
+                  <div className="flex-1 overflow-y-auto p-4">
+                    {centerNav.map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={closeMenu}
+                        className={`mb-1 block rounded-full px-4 py-3 text-sm font-semibold transition duration-150 ${
+                          isActive(item.href)
+                            ? "bg-[var(--primary-from)] text-white"
+                            : "text-[var(--text-secondary)] hover:bg-[var(--chip)]"
+                        }`}
+                      >
+                        {item.label}
+                      </Link>
+                    ))}
+                    {ready && !isLoggedIn && (
+                      <div className="mt-4 grid gap-2 border-t border-[var(--border)] pt-4">
+                        <Link
+                          href="/login"
+                          onClick={closeMenu}
+                          className="rounded-full px-4 py-3 text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--chip)]"
+                        >
+                          {t("nav.login")}
+                        </Link>
+                        <Link
+                          href="/signup"
+                          onClick={closeMenu}
+                          className="rounded-full bg-[var(--primary)] px-4 py-3 text-center text-sm font-semibold text-[var(--primary-foreground)]"
+                        >
+                          {t("nav.join")}
+                        </Link>
+                      </div>
+                    )}
+                    {ready && isLoggedIn && (
+                      <div className="mt-4 border-t border-[var(--border)] pt-4">
+                        {mobileAccountItems.map((item) => {
+                          const Icon = item.icon;
+                          return (
+                            <Link
+                              key={item.href}
+                              href={item.href}
+                              onClick={closeMenu}
+                              className="mb-1 flex items-center gap-3 rounded-[var(--radius-button)] px-4 py-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:bg-[var(--chip)]"
+                            >
+                              <Icon className="h-4 w-4 shrink-0 text-[var(--primary)]" />
+                              {item.label}
+                            </Link>
+                          );
+                        })}
+                        <button
+                          type="button"
+                          onClick={handleLogout}
+                          className="mt-2 flex w-full items-center gap-3 rounded-[var(--radius-button)] px-4 py-3 text-sm font-semibold text-red-600"
+                        >
+                          <LogOut className="h-4 w-4" />
+                          {t("nav.logout")}
+                        </button>
+                      </div>
+                    )}
+                    <div className="mt-4 grid grid-cols-2 gap-2 border-t border-[var(--border)] pt-4">
+                      <button
+                        type="button"
+                        onClick={toggleTheme}
+                        aria-label={
+                          darkMode ? t("theme.lightAria") : t("theme.darkAria")
+                        }
+                        className="flex items-center gap-2 rounded-[var(--radius-button)] bg-[var(--surface-secondary)] px-3 py-3 text-left text-sm font-semibold text-[var(--text-secondary)] transition hover:bg-[var(--chip)]"
+                      >
+                        {darkMode ? (
+                          <Moon className="h-4 w-4 text-[var(--primary)]" />
+                        ) : (
+                          <Sun className="h-4 w-4 text-[var(--primary)]" />
+                        )}
+                        {darkMode ? t("theme.dark") : t("theme.light")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLocale(locale === "en" ? "ru" : "en")}
+                        aria-label={
+                          locale === "en"
+                            ? t("lang.ariaWhenEn")
+                            : t("lang.ariaWhenRu")
+                        }
+                        className="flex items-center gap-2 rounded-[var(--radius-button)] bg-[var(--surface-secondary)] px-3 py-3 text-left text-sm font-semibold text-[var(--text-secondary)] transition hover:bg-[var(--chip)]"
+                      >
+                        <Languages className="h-4 w-4 text-[var(--primary)]" />
+                        {locale === "en" ? t("lang.en") : t("lang.ru")}
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>,
           document.body,
         )}
     </header>

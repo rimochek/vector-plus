@@ -982,7 +982,7 @@ export function TutorDashboard() {
                         {t("tutorDash.referDesc")}
                       </p>
                     </DashboardCard>
-                    <DashboardCard className="p-5">
+                    <DashboardCard className="group relative p-5 transition duration-200 hover:-translate-y-0.5">
                       <CheckCircle2 className="mb-4 h-10 w-10 rounded-2xl bg-[var(--primary-soft)] p-2 text-[var(--primary)]" />
                       <h3 className="font-bold text-[var(--text-primary)]">
                         {t("tutorDash.boostTitle")}
@@ -990,6 +990,12 @@ export function TutorDashboard() {
                       <p className="mt-1 text-sm text-[var(--text-muted)]">
                         {t("tutorDash.boostDesc")}
                       </p>
+                      <button
+                        type="button"
+                        onClick={() => handleTabChange("profile")}
+                        aria-label={t("tutorDash.boostTitle")}
+                        className="absolute inset-0 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                      />
                     </DashboardCard>
                   </div>
                 </div>
@@ -1103,4 +1109,3 @@ export function TutorDashboard() {
     </div>
   )
 }
-

@@ -11,6 +11,7 @@ import {
   AccountStatus,
   AuthProvider,
   AvatarSource,
+  ContactMethod,
   CurrencyCode,
   UserRole,
 } from '@prisma/client';
@@ -336,6 +337,7 @@ export class AuthService {
           locale: profile.language_code,
         },
       });
+      await this.syncTutorTelegramContact(existing.userId, profile.username);
       return this.issueAuthResponse(existing.userId, undefined, {
         existingAccount: true,
       });
@@ -401,6 +403,10 @@ export class AuthService {
             avatarUrl: profile.photo_url,
             applicationStatus: 'DRAFT',
             isAcceptingStudents: false,
+            telegramUsername: profile.username,
+            preferredContactMethod: profile.username
+              ? ContactMethod.TELEGRAM
+              : undefined,
           },
         });
       }
@@ -545,9 +551,34 @@ export class AuthService {
           notificationsEnabled: true,
         },
       });
+      if (profile.username) {
+        const telegramUsername = profile.username.replace(/^@/, '').trim();
+        await tx.tutorProfile.updateMany({
+          where: { userId },
+          data: { telegramUsername },
+        });
+        await tx.tutorProfile.updateMany({
+          where: { userId, preferredContactMethod: null },
+          data: { preferredContactMethod: ContactMethod.TELEGRAM },
+        });
+      }
     });
 
     return { success: true, linked: true };
+  }
+
+  private async syncTutorTelegramContact(userId: string, username?: string) {
+    const telegramUsername = username?.replace(/^@/, '').trim();
+    if (!telegramUsername) return;
+
+    await this.prisma.tutorProfile.updateMany({
+      where: { userId },
+      data: { telegramUsername },
+    });
+    await this.prisma.tutorProfile.updateMany({
+      where: { userId, preferredContactMethod: null },
+      data: { preferredContactMethod: ContactMethod.TELEGRAM },
+    });
   }
 
   private async applyGoogleAvatarIfMissing(userId: string, picture?: string) {
