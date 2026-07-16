@@ -196,9 +196,11 @@ export function StudentSignupFlow() {
   }
 
   const patchDraft = (patch: Partial<typeof draft>) => {
-    const next = { ...draft, ...patch }
-    setDraft(next)
-    saveStudentDraft(next)
+    setDraft((current) => {
+      const next = { ...current, ...patch }
+      saveStudentDraft(next)
+      return next
+    })
   }
 
   const createAccount = accountForm.handleSubmit(async (values) => {
