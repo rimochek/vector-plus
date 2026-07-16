@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { AnimatePresence } from "motion/react"
 import { Heart, Loader2, Phone } from "lucide-react"
 import { TelegramIcon } from "@/app/components/icons/telegram-icon"
 import { useTranslations } from "@/lib/i18n/locale-context"
@@ -114,7 +115,7 @@ export function TutorContactSidebar({
   return (
     <>
       <aside
-        className={`sticky top-24 rounded-[var(--radius-panel)] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--shadow-sm)] ${className}`}
+        className={`rounded-[var(--radius-panel)] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--shadow-sm)] xl:sticky xl:top-24 ${className}`}
       >
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
@@ -198,18 +199,22 @@ export function TutorContactSidebar({
         </p>
       </aside>
 
-      <TutorBookLessonModal
-        open={bookOpen}
-        onClose={() => setBookOpen(false)}
-        tutor={tutor}
-        initialSlotId={preferredSlot?.id ?? null}
-        existingBookingId={activeBooking?.id ?? null}
-        onBooked={() => {
-          void api.bookings.studentList().then((bookings) => {
-            setActiveBooking(findActiveBooking(bookings, tutor.id))
-          })
-        }}
-      />
+      <AnimatePresence>
+        {bookOpen && (
+          <TutorBookLessonModal
+            open
+            onClose={() => setBookOpen(false)}
+            tutor={tutor}
+            initialSlotId={preferredSlot?.id ?? null}
+            existingBookingId={activeBooking?.id ?? null}
+            onBooked={() => {
+              void api.bookings.studentList().then((bookings) => {
+                setActiveBooking(findActiveBooking(bookings, tutor.id))
+              })
+            }}
+          />
+        )}
+      </AnimatePresence>
     </>
   )
 }

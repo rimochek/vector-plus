@@ -153,13 +153,16 @@ export class AuthService {
   }): string {
     const fromName = profile.name?.trim();
     if (fromName) return fromName;
-    const fromParts = `${profile.givenName ?? ''} ${profile.familyName ?? ''}`.trim();
+    const fromParts =
+      `${profile.givenName ?? ''} ${profile.familyName ?? ''}`.trim();
     if (fromParts) return fromParts;
     return profile.email.split('@')[0] ?? 'Tutora user';
   }
 
   async authenticateWithGoogle(dto: GoogleAuthDto) {
-    const googleProfile = await this.googleAuthService.verifyIdToken(dto.credential);
+    const googleProfile = await this.googleAuthService.verifyIdToken(
+      dto.credential,
+    );
 
     const existingIdentity = await this.prisma.authIdentity.findUnique({
       where: {
@@ -178,6 +181,12 @@ export class AuthService {
       });
       return this.issueAuthResponse(existingIdentity.userId, undefined, {
         existingAccount: true,
+      });
+    }
+
+    if (existingIdentity?.user?.deletedAt) {
+      await this.prisma.authIdentity.delete({
+        where: { id: existingIdentity.id },
       });
     }
 
@@ -205,7 +214,10 @@ export class AuthService {
             userId: existingUser.id,
           },
         });
-        await this.applyGoogleAvatarIfMissing(existingUser.id, googleProfile.picture);
+        await this.applyGoogleAvatarIfMissing(
+          existingUser.id,
+          googleProfile.picture,
+        );
         await this.prisma.user.update({
           where: { id: existingUser.id },
           data: { lastLoginAt: new Date(), emailVerifiedAt: new Date() },
@@ -222,11 +234,9 @@ export class AuthService {
       });
     }
 
-    const intendedRole = dto.intendedRole === 'TUTOR' ? UserRole.TUTOR : UserRole.STUDENT;
-    if (
-      dto.intendedRole &&
-      !['STUDENT', 'TUTOR'].includes(dto.intendedRole)
-    ) {
+    const intendedRole =
+      dto.intendedRole === 'TUTOR' ? UserRole.TUTOR : UserRole.STUDENT;
+    if (dto.intendedRole && !['STUDENT', 'TUTOR'].includes(dto.intendedRole)) {
       throw new BadRequestException('Invalid signup role');
     }
 
@@ -302,9 +312,10 @@ export class AuthService {
           providerAccountId: telegramId,
         },
       },
+      include: { user: true },
     });
 
-    if (existing) {
+    if (existing && !existing.user.deletedAt) {
       await this.prisma.telegramConnection.upsert({
         where: { userId: existing.userId },
         create: {
@@ -325,11 +336,23 @@ export class AuthService {
           locale: profile.language_code,
         },
       });
-      return this.issueAuthResponse(existing.userId, undefined, { existingAccount: true });
+      return this.issueAuthResponse(existing.userId, undefined, {
+        existingAccount: true,
+      });
+    }
+
+    if (existing?.user.deletedAt) {
+      await this.prisma.$transaction([
+        this.prisma.telegramConnection.deleteMany({
+          where: { userId: existing.userId },
+        }),
+        this.prisma.authIdentity.delete({ where: { id: existing.id } }),
+      ]);
     }
 
     const role = intendedRole === 'TUTOR' ? UserRole.TUTOR : UserRole.STUDENT;
-    const displayName = `${profile.first_name} ${profile.last_name ?? ''}`.trim();
+    const displayName =
+      `${profile.first_name} ${profile.last_name ?? ''}`.trim();
     const user = await this.prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
         data: {
@@ -384,7 +407,10 @@ export class AuthService {
       return created;
     });
 
-    return this.issueAuthResponse(user.id, role === UserRole.TUTOR ? 'tutor' : 'student');
+    return this.issueAuthResponse(
+      user.id,
+      role === UserRole.TUTOR ? 'tutor' : 'student',
+    );
   }
 
   async attachTelegramChat(telegramUserId: string, telegramChatId: string) {
@@ -404,7 +430,8 @@ export class AuthService {
   }
 
   async linkGoogleAccount(userId: string, credential: string) {
-    const googleProfile = await this.googleAuthService.verifyIdToken(credential);
+    const googleProfile =
+      await this.googleAuthService.verifyIdToken(credential);
 
     const taken = await this.prisma.authIdentity.findUnique({
       where: {
@@ -416,7 +443,9 @@ export class AuthService {
     });
 
     if (taken && taken.userId !== userId) {
-      throw new ConflictException('This Google account is already linked to another user');
+      throw new ConflictException(
+        'This Google account is already linked to another user',
+      );
     }
 
     const user = await this.prisma.user.findUnique({
@@ -444,6 +473,79 @@ export class AuthService {
     });
 
     await this.applyGoogleAvatarIfMissing(userId, googleProfile.picture);
+
+    return { success: true, linked: true };
+  }
+
+  async linkTelegramAccount(userId: string, profile: TelegramUserData) {
+    const telegramId = String(profile.id);
+    const [user, taken] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        include: { authIdentities: true },
+      }),
+      this.prisma.authIdentity.findUnique({
+        where: {
+          provider_providerAccountId: {
+            provider: AuthProvider.TELEGRAM,
+            providerAccountId: telegramId,
+          },
+        },
+      }),
+    ]);
+
+    if (!user || user.deletedAt) {
+      throw new UnauthorizedException('User not found');
+    }
+    if (taken && taken.userId !== userId) {
+      throw new ConflictException(
+        'This Telegram account is already linked to another user',
+      );
+    }
+
+    const currentTelegram = user.authIdentities.find(
+      (identity) => identity.provider === AuthProvider.TELEGRAM,
+    );
+    if (currentTelegram && currentTelegram.providerAccountId !== telegramId) {
+      throw new ConflictException(
+        'A different Telegram account is already linked to this user',
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      if (!currentTelegram) {
+        await tx.authIdentity.create({
+          data: {
+            provider: AuthProvider.TELEGRAM,
+            providerAccountId: telegramId,
+            userId,
+          },
+        });
+      }
+      await tx.telegramConnection.upsert({
+        where: { userId },
+        create: {
+          userId,
+          telegramUserId: telegramId,
+          telegramChatId: telegramId,
+          telegramUsername: profile.username,
+          firstName: profile.first_name,
+          lastName: profile.last_name,
+          photoUrl: profile.photo_url,
+          locale: profile.language_code,
+          notificationsEnabled: true,
+        },
+        update: {
+          telegramChatId: telegramId,
+          telegramUsername: profile.username,
+          firstName: profile.first_name,
+          lastName: profile.last_name,
+          photoUrl: profile.photo_url,
+          locale: profile.language_code,
+          notificationsEnabled: true,
+        },
+      });
+    });
 
     return { success: true, linked: true };
   }
@@ -680,9 +782,7 @@ export class AuthService {
           data: {
             userId: created.id,
             displayName,
-            bio: isMinimal
-              ? 'Profile in progress.'
-              : description!.trim(),
+            bio: isMinimal ? 'Profile in progress.' : description!.trim(),
             defaultHourlyRateCents: isMinimal ? 500000 : hourlyRateCents!,
             defaultCurrency: CurrencyCode.KZT,
             experienceYears: isMinimal ? 0 : experienceYears,
@@ -690,9 +790,7 @@ export class AuthService {
             country: isMinimal ? null : country!.trim(),
             city: isMinimal ? null : city!.trim(),
             preferredStudentAgeRange: isMinimal ? null : ageRangeStored,
-            searchDocument: tags?.length
-              ? JSON.stringify({ tags })
-              : undefined,
+            searchDocument: tags?.length ? JSON.stringify({ tags }) : undefined,
             applicationStatus: isMinimal ? 'DRAFT' : 'SUBMITTED',
             isAcceptingStudents: !isMinimal,
           },
@@ -773,6 +871,7 @@ export class AuthService {
         roles: true,
         studentProfile: true,
         tutorProfile: true,
+        authIdentities: true,
       },
     });
   }
@@ -801,6 +900,9 @@ export class AuthService {
       roles,
       role: roles[0] ?? 'student',
       displayName,
+      authProviders: refreshed.authIdentities.map((identity) =>
+        identity.provider.toLowerCase(),
+      ),
       studentProfile: refreshed.studentProfile
         ? (() => {
             const { text, tags } = parseLearningGoals(
@@ -809,6 +911,7 @@ export class AuthService {
             return {
               id: refreshed.studentProfile!.id,
               displayName: refreshed.studentProfile!.displayName,
+              avatarUrl: refreshed.studentProfile!.avatarUrl,
               budgetMinCents: refreshed.studentProfile!.budgetMinCents,
               budgetMaxCents: refreshed.studentProfile!.budgetMaxCents,
               budgetCurrency: refreshed.studentProfile!.budgetCurrency,
@@ -819,8 +922,10 @@ export class AuthService {
               ),
               learningGoals: text || refreshed.studentProfile!.learningGoals,
               tags,
-              onboardingCompleted: refreshed.studentProfile!.onboardingCompleted,
-              preferredLessonFormat: refreshed.studentProfile!.preferredLessonFormat,
+              onboardingCompleted:
+                refreshed.studentProfile!.onboardingCompleted,
+              preferredLessonFormat:
+                refreshed.studentProfile!.preferredLessonFormat,
               preferredTimes: refreshed.studentProfile!.preferredTimes,
               learningLevel: refreshed.studentProfile!.learningLevel,
             };
@@ -849,7 +954,8 @@ export class AuthService {
               bio: refreshed.tutorProfile!.bio,
               headline: refreshed.tutorProfile!.headline,
               avatarUrl: refreshed.tutorProfile!.avatarUrl,
-              defaultHourlyRateCents: refreshed.tutorProfile!.defaultHourlyRateCents,
+              defaultHourlyRateCents:
+                refreshed.tutorProfile!.defaultHourlyRateCents,
               experienceYears: refreshed.tutorProfile!.experienceYears,
               education: refreshed.tutorProfile!.education,
               country: refreshed.tutorProfile!.country,
@@ -929,6 +1035,12 @@ export class AuthService {
         where: { userId },
         data: { isAcceptingStudents: false },
       });
+
+      // Provider identities must not outlive a deleted account. Keeping them
+      // would make a later Google/Telegram signup resolve to this soft-deleted
+      // user and would also retain the provider's unique account identifier.
+      await tx.telegramConnection.deleteMany({ where: { userId } });
+      await tx.authIdentity.deleteMany({ where: { userId } });
 
       await tx.user.update({
         where: { id: userId },

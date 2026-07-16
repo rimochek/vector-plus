@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import { AnimatePresence, motion } from "motion/react"
 import {
   Search,
   SlidersHorizontal,
@@ -451,15 +452,31 @@ export const FindTutors = () => {
         </div>
       </Container>
 
-      {mobileFiltersOpen && (
-        <div className="fixed inset-0 z-[100] lg:hidden">
-          <button
+      <AnimatePresence>
+        {mobileFiltersOpen && (
+        <motion.div
+          className="fixed inset-0 z-[100] lg:hidden"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+        >
+          <motion.button
             type="button"
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             aria-label={t("find.closeFilters")}
             onClick={() => setMobileFiltersOpen(false)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
           />
-          <div className="absolute inset-x-0 bottom-0 flex max-h-[88dvh] flex-col rounded-t-[24px] border-t border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]">
+          <motion.div
+            className="absolute inset-x-0 bottom-0 flex max-h-[88dvh] flex-col rounded-t-[24px] border-t border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]"
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", stiffness: 360, damping: 34 }}
+          >
             <div className="flex items-center justify-between border-b border-[var(--border)] p-4">
               <h3 className="font-bold text-[var(--text-primary)]">
                 {t("find.filtersTitle")}
@@ -486,9 +503,10 @@ export const FindTutors = () => {
                 {t("find.applyFilters")}
               </Button>
             </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

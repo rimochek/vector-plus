@@ -411,14 +411,22 @@ export type AdminTutorDetail = AdminTutorSummary & {
 
 export const api = {
   auth: {
-    changePassword: (currentPassword: string, newPassword: string) =>
-      apiFetch<{ success: boolean; message: string }>("/auth/password", {
-        method: "PATCH",
-        body: JSON.stringify({ currentPassword, newPassword }),
-      }),
     deleteAccount: () =>
       apiFetch<{ success: boolean; message: string }>("/auth/me", {
         method: "DELETE",
+      }),
+    linkTelegram: (payload: {
+      id: number
+      first_name: string
+      last_name?: string
+      username?: string
+      photo_url?: string
+      auth_date: number
+      hash: string
+    }) =>
+      apiFetch<{ success: boolean; linked: boolean }>("/auth/telegram/link", {
+        method: "POST",
+        body: JSON.stringify(payload),
       }),
   },
   tutors: {

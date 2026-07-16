@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { createHash } from 'crypto';
 import {
   AvailabilityRuleType,
@@ -31,10 +35,7 @@ type UploadedFilePayload = {
 export class TutorsService {
   constructor(private prisma: PrismaService) {}
 
-  async listTutors(
-    excludeUserId?: string,
-    formatsQuery?: string | string[],
-  ) {
+  async listTutors(excludeUserId?: string, formatsQuery?: string | string[]) {
     let excludeTutorProfileId: string | undefined;
     if (excludeUserId) {
       const profile = await this.prisma.tutorProfile.findUnique({
@@ -166,8 +167,12 @@ export class TutorsService {
     const updated = await this.prisma.tutorProfile.update({
       where: { id: tutor.id },
       data: {
-        ...(dto.displayName !== undefined ? { displayName: dto.displayName.trim() } : {}),
-        ...(dto.headline !== undefined ? { headline: dto.headline.trim() || null } : {}),
+        ...(dto.displayName !== undefined
+          ? { displayName: dto.displayName.trim() }
+          : {}),
+        ...(dto.headline !== undefined
+          ? { headline: dto.headline.trim() || null }
+          : {}),
         ...(dto.bio !== undefined ? { bio: dto.bio.trim() } : {}),
         ...(dto.defaultHourlyRateCents !== undefined
           ? { defaultHourlyRateCents: dto.defaultHourlyRateCents }
@@ -175,8 +180,12 @@ export class TutorsService {
         ...(dto.experienceYears !== undefined
           ? { experienceYears: dto.experienceYears }
           : {}),
-        ...(dto.education !== undefined ? { education: dto.education.trim() } : {}),
-        ...(dto.country !== undefined ? { country: dto.country.trim() || null } : {}),
+        ...(dto.education !== undefined
+          ? { education: dto.education.trim() }
+          : {}),
+        ...(dto.country !== undefined
+          ? { country: dto.country.trim() || null }
+          : {}),
         ...(dto.city !== undefined ? { city: dto.city.trim() || null } : {}),
         ...(dto.avatarUrl !== undefined
           ? { avatarUrl: dto.avatarUrl.trim() || null }
@@ -194,9 +203,7 @@ export class TutorsService {
           : {}),
         ...(dto.phone !== undefined
           ? {
-              phone: dto.phone.trim()
-                ? normalizePhoneNumber(dto.phone)
-                : null,
+              phone: dto.phone.trim() ? normalizePhoneNumber(dto.phone) : null,
             }
           : {}),
         ...(dto.telegramUsername !== undefined
@@ -268,7 +275,8 @@ export class TutorsService {
     if (!tutor.country?.trim() || !tutor.city?.trim()) {
       errors.push('Location is required');
     }
-    if (!metadata.tags?.length) errors.push('At least one teaching subject is required');
+    if (!metadata.tags?.length)
+      errors.push('At least one teaching subject is required');
     if (tutor.defaultHourlyRateCents < 1000) {
       errors.push('Hourly rate is required');
     }
@@ -282,9 +290,7 @@ export class TutorsService {
       tutor.applicationStatus === TutorApplicationStatus.UNDER_REVIEW ||
       tutor.applicationStatus === TutorApplicationStatus.APPROVED
     ) {
-      throw new BadRequestException(
-        'Your application is already submitted',
-      );
+      throw new BadRequestException('Your application is already submitted');
     }
 
     const isResubmit =
@@ -433,12 +439,12 @@ export class TutorsService {
         timezone: rules[0]?.timezone ?? tutor.user.timezone ?? 'UTC',
         days: this.serializeAvailabilityOverview(rules),
       },
-      pendingRequests: pending
-        .slice(0, 4)
-        .map((lesson) => this.serializeDashboardLesson(lesson)),
-      upcomingLessons: upcoming
-        .slice(0, 4)
-        .map((lesson) => this.serializeDashboardLesson(lesson)),
+      pendingRequests: pending.map((lesson) =>
+        this.serializeDashboardLesson(lesson),
+      ),
+      upcomingLessons: upcoming.map((lesson) =>
+        this.serializeDashboardLesson(lesson),
+      ),
       recentConversations: conversations.map((conversation) => {
         const lastMessage = conversation.messages[0];
         const lastReadAt = conversation.participants[0]?.lastReadAt;
@@ -551,7 +557,9 @@ export class TutorsService {
         : [];
       const verificationDocuments = Array.isArray(parsed.verificationDocuments)
         ? parsed.verificationDocuments.filter(
-            (entry): entry is {
+            (
+              entry,
+            ): entry is {
               type: string;
               fileName: string;
               storageKey: string;
@@ -607,8 +615,9 @@ export class TutorsService {
     ];
     const normalizedFormats = [
       ...new Set(
-        (metadata.lessonFormats ?? [])
-          .filter((format) => format === 'online' || format === 'offline'),
+        (metadata.lessonFormats ?? []).filter(
+          (format) => format === 'online' || format === 'offline',
+        ),
       ),
     ];
     return JSON.stringify({
@@ -743,21 +752,9 @@ export class TutorsService {
     const dbVerificationDocuments =
       'verificationDocuments' in tutor &&
       Array.isArray(
-        (tutor as { verificationDocuments?: Array<{
-          id: string;
-          documentType: string;
-          displayFileName: string;
-          objectKey: string;
-          status: string;
-          rejectionReason?: string | null;
-          uploadedAt?: Date;
-          sizeBytes?: number;
-          mimeType?: string;
-          metadata?: unknown;
-        }> }).verificationDocuments,
-      )
-        ? (tutor as {
-            verificationDocuments: Array<{
+        (
+          tutor as {
+            verificationDocuments?: Array<{
               id: string;
               documentType: string;
               displayFileName: string;
@@ -769,7 +766,25 @@ export class TutorsService {
               mimeType?: string;
               metadata?: unknown;
             }>;
-          }).verificationDocuments.map((doc) =>
+          }
+        ).verificationDocuments,
+      )
+        ? (
+            tutor as {
+              verificationDocuments: Array<{
+                id: string;
+                documentType: string;
+                displayFileName: string;
+                objectKey: string;
+                status: string;
+                rejectionReason?: string | null;
+                uploadedAt?: Date;
+                sizeBytes?: number;
+                mimeType?: string;
+                metadata?: unknown;
+              }>;
+            }
+          ).verificationDocuments.map((doc) =>
             doc.uploadedAt && doc.sizeBytes != null && doc.mimeType
               ? {
                   ...serializeVerificationDocument({
@@ -830,7 +845,8 @@ export class TutorsService {
           : undefined,
       applicationSubmittedAt:
         'applicationSubmittedAt' in tutor &&
-        (tutor as { applicationSubmittedAt: Date | null }).applicationSubmittedAt
+        (tutor as { applicationSubmittedAt: Date | null })
+          .applicationSubmittedAt
           ? (
               tutor as { applicationSubmittedAt: Date }
             ).applicationSubmittedAt.toISOString()

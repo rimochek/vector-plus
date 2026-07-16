@@ -3,6 +3,7 @@ import { getApiUrl } from "./api"
 export type UserProfileSlice = {
   id?: string
   displayName?: string | null
+  avatarUrl?: string | null
   budgetMinCents?: number | null
   budgetMaxCents?: number | null
   budgetCurrency?: string | null
@@ -17,6 +18,7 @@ export type StoredUser = {
   email?: string
   role?: string
   roles?: string[]
+  authProviders?: string[]
   displayName?: string | null
   studentProfile?: UserProfileSlice | null
   tutorProfile?: UserProfileSlice | null
@@ -179,6 +181,11 @@ function clearLocalSession(): void {
 export async function logout(): Promise<void> {
   if (typeof window === "undefined") return
 
+  // Stop authenticated UI and background polling immediately. The server
+  // request only revokes the HttpOnly refresh cookie and can finish afterward.
+  clearLocalSession()
+  handlingSessionExpiry = false
+
   try {
     await fetch(`${getApiUrl()}/auth/logout`, {
       method: "POST",
@@ -188,8 +195,6 @@ export async function logout(): Promise<void> {
     /* still clear local session */
   }
 
-  clearLocalSession()
-  handlingSessionExpiry = false
 }
 
 export async function refreshCurrentUser(): Promise<StoredUser | null> {

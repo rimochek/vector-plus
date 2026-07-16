@@ -27,6 +27,7 @@ export function ProfileMenu({ user, size = "md" }: ProfileMenuProps) {
   const homeHref = isTutor ? "/tutor-dashboard" : "/dashboard"
 
   const initials = getUserInitials(user)
+  const avatarUrl = user?.tutorProfile?.avatarUrl ?? user?.studentProfile?.avatarUrl
   const avatarClass =
     size === "sm"
       ? "flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-xs font-bold text-white ring-2 ring-white shadow-sm"
@@ -65,7 +66,7 @@ export function ProfileMenu({ user, size = "md" }: ProfileMenuProps) {
       label: isTutor ? t("nav.tutorDashboard") : t("nav.profile"),
     },
     {
-      href: dashboardTabHref(isTutor ? "bookings" : "lessons", user),
+      href: dashboardTabHref(isTutor ? "upcoming" : "lessons", user),
       icon: Calendar,
       label: t("dash.tab.lessons"),
     },
@@ -100,7 +101,16 @@ export function ProfileMenu({ user, size = "md" }: ProfileMenuProps) {
         aria-haspopup="menu"
         className={avatarClass}
       >
-        {initials}
+        {avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={avatarUrl}
+            alt=""
+            className="h-full w-full rounded-full object-cover"
+          />
+        ) : (
+          initials
+        )}
       </button>
 
       {open && (

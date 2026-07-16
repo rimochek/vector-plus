@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 import {
   getStoredUser,
   isLoggedIn,
+  refreshCurrentUser,
   type StoredUser,
 } from "@/lib/auth-client"
 
@@ -20,6 +21,9 @@ export function useAuthSession() {
 
   useEffect(() => {
     refresh()
+    if (isLoggedIn()) {
+      void refreshCurrentUser().then(() => refresh())
+    }
     window.addEventListener("storage", refresh)
     window.addEventListener("vector-auth-change", refresh)
     return () => {

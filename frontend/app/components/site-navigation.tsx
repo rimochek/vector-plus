@@ -5,11 +5,16 @@ import { createPortal } from "react-dom"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
+  Bell,
+  Calendar,
+  Heart,
   Languages,
   LogOut,
   Menu,
+  MessageSquare,
   Moon,
   Sun,
+  User,
   X,
 } from "lucide-react"
 import { useStoredTheme } from "@/lib/use-stored-theme"
@@ -65,6 +70,23 @@ export const Navigation = () => {
   const isTutor = (user?.role ?? user?.roles?.[0]) === "tutor"
   const conversationsHref = dashboardTabHref("chats", user)
   const notificationsHref = dashboardTabHref("notifications", user)
+  const mobileAccountItems = [
+    {
+      href: isTutor ? "/tutor-dashboard" : "/dashboard",
+      label: isTutor ? t("nav.tutorDashboard") : t("nav.profile"),
+      icon: User,
+    },
+    {
+      href: dashboardTabHref(isTutor ? "upcoming" : "lessons", user),
+      label: t("dash.tab.lessons"),
+      icon: Calendar,
+    },
+    { href: conversationsHref, label: t("dash.tab.chats"), icon: MessageSquare },
+    { href: notificationsHref, label: t("dash.tab.notifications"), icon: Bell },
+    ...(!isTutor
+      ? [{ href: dashboardTabHref("favorites", user), label: t("dash.tab.favorites"), icon: Heart }]
+      : []),
+  ]
 
   const centerNav = isLoggedIn
     ? isTutor
@@ -246,14 +268,30 @@ export const Navigation = () => {
                   </div>
                 )}
                 {ready && isLoggedIn && (
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    className="mt-4 flex w-full items-center gap-2 rounded-[var(--radius-button)] px-4 py-3 text-sm font-semibold text-red-600"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    {t("nav.logout")}
-                  </button>
+                  <div className="mt-4 border-t border-[var(--border)] pt-4">
+                    {mobileAccountItems.map((item) => {
+                      const Icon = item.icon
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          onClick={closeMenu}
+                          className="mb-1 flex items-center gap-3 rounded-[var(--radius-button)] px-4 py-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:bg-[var(--chip)]"
+                        >
+                          <Icon className="h-4 w-4 shrink-0 text-[var(--primary)]" />
+                          {item.label}
+                        </Link>
+                      )
+                    })}
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="mt-2 flex w-full items-center gap-3 rounded-[var(--radius-button)] px-4 py-3 text-sm font-semibold text-red-600"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      {t("nav.logout")}
+                    </button>
+                  </div>
                 )}
               </div>
             </div>

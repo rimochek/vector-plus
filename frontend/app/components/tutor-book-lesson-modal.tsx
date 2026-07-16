@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { motion } from "motion/react"
 import { ArrowLeft, Calendar, Loader2, Send, X } from "lucide-react"
 import { useTranslations } from "@/lib/i18n/locale-context"
 import type { MessageId } from "@/lib/i18n/messages"
@@ -338,14 +339,29 @@ export function TutorBookLessonModal({
   )
 
   return (
-    <div className="fixed inset-0 z-[400] flex items-end justify-center p-0 sm:items-center sm:p-4">
-      <button
+    <motion.div
+      className="fixed inset-0 z-[400] flex items-end justify-center p-0 sm:items-center sm:p-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
+    >
+      <motion.button
         type="button"
         className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
         aria-label={t("lead.close")}
         onClick={onClose}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
       />
-      <div className="relative z-10 flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-t-[2rem] border border-[var(--border)] bg-[var(--surface)] shadow-2xl sm:rounded-[2rem]">
+      <motion.div
+        className="relative z-10 flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-t-[2rem] border border-[var(--border)] bg-[var(--surface)] shadow-2xl sm:rounded-[2rem]"
+        initial={{ y: 48, scale: 0.98, opacity: 0 }}
+        animate={{ y: 0, scale: 1, opacity: 1 }}
+        exit={{ y: 40, scale: 0.98, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 380, damping: 32 }}
+      >
         <div className="flex items-start justify-between gap-4 border-b border-[var(--border)] px-6 py-5">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--primary)]">
@@ -682,7 +698,7 @@ export function TutorBookLessonModal({
             )}
           </div>
         )}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }

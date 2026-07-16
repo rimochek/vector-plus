@@ -1,4 +1,11 @@
-import { Body, Controller, Headers, Post, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Headers,
+  Post,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from '../auth/auth.service';
@@ -9,6 +16,9 @@ import {
 } from './dto/telegram-auth.dto';
 import { TelegramAuthService } from './telegram-auth.service';
 import { TelegramBotService } from './telegram-bot.service';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import type { AuthUser } from '../common/decorators/current-user.decorator';
 
 @Controller('auth/telegram')
 export class TelegramController {
@@ -64,6 +74,18 @@ export class TelegramController {
       existingAccount: result.existingAccount,
       user: result.user,
     };
+  }
+
+  @Post('link')
+  @UseGuards(JwtAuthGuard)
+  async linkAccount(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: TelegramWidgetAuthDto,
+  ) {
+    const { intendedRole: _intendedRole, ...widgetData } = dto;
+    void _intendedRole;
+    const telegramUser = this.telegramAuth.validateWidgetData(widgetData);
+    return this.auth.linkTelegramAccount(user.id, telegramUser);
   }
 
   @Post('webhook')
