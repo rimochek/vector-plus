@@ -1,95 +1,134 @@
 "use client"
 
-import Link from "next/link"
 import { useState } from "react"
-import { GraduationCap, ShieldCheck, UserRound } from "lucide-react"
+import Link from "next/link"
+import { ArrowLeft, GraduationCap, ShieldCheck, UserRound } from "lucide-react"
 import { AuthWizardLayout, WizardStepHeader, type WizardStepItem } from "@/app/components/auth-wizard-layout"
 import { GoogleSignInButton, GoogleAuthDivider } from "@/app/components/auth/google-sign-in-button"
 import { TelegramSignInButton } from "@/app/components/auth/telegram-sign-in-button"
+import { getDefaultRouteForUser } from "@/lib/auth-client"
+import { saveSignupRole, saveStudentStep, saveTutorStep } from "@/lib/onboarding/signup-session"
 import { useToast } from "@/lib/toast-context"
+import { useRouter } from "next/navigation"
 
-const steps: WizardStepItem[] = [
-  { id: "signin", label: "Безопасный вход", status: "current" },
-  { id: "explore", label: "Найдите преподавателя", status: "upcoming" },
-  { id: "learn", label: "Начните учиться", status: "upcoming" },
-]
+type LoginRole = "STUDENT" | "TUTOR"
+
+function rolePath(role: LoginRole) {
+  return role === "TUTOR" ? "/signup/tutor" : "/signup/student"
+}
 
 export default function LoginPage() {
+  const router = useRouter()
   const toast = useToast()
-  const [intendedRole, setIntendedRole] = useState<"STUDENT" | "TUTOR" | null>(null)
+  const [role, setRole] = useState<LoginRole | null>(null)
+  const [step, setStep] = useState<"role" | "provider">("role")
+
+  const wizardSteps: WizardStepItem[] = [
+    { id: "role", label: "Choose your role", status: step === "role" ? "current" : "complete" },
+    { id: "provider", label: "Continue securely", status: step === "provider" ? "current" : "upcoming" },
+    { id: "complete", label: "Open Tutora", status: "upcoming" },
+  ]
+
+  const chooseRole = (nextRole: LoginRole) => {
+    setRole(nextRole)
+    saveSignupRole(nextRole === "TUTOR" ? "tutor" : "student")
+    setStep("provider")
+  }
+
+  const handleAuthenticated = (data: {
+    existingAccount?: boolean
+    user: Parameters<typeof getDefaultRouteForUser>[0]
+  }) => {
+    if (data.existingAccount) {
+      router.push(getDefaultRouteForUser(data.user))
+      return
+    }
+
+    if (role === "TUTOR") saveTutorStep("welcome")
+    else saveStudentStep("welcome")
+    router.push(rolePath(role ?? "STUDENT"))
+  }
+
   return (
     <AuthWizardLayout
       mode="login"
-      sidebarTitle="С возвращением в Tutora"
-      sidebarSubtitle="Один аккаунт для занятий, расписания и общения."
-      steps={steps}
-      footer={<>Впервые здесь? <Link href="/signup" className="font-bold text-[var(--primary-from)]">Создать аккаунт</Link></>}
+      sidebarTitle="Welcome to Tutora"
+      sidebarSubtitle="One account for lessons, schedules, conversations, and teaching."
+      steps={wizardSteps}
+      footer={
+        <>
+          New to Tutora?{" "}
+          <Link href="/signup" className="font-bold text-[var(--primary-from)]">
+            Create an account
+          </Link>
+        </>
+      }
     >
-      <div className="space-y-5">
-        <WizardStepHeader
-          eyebrow="Быстро и безопасно"
-          title="Войдите в Tutora"
-          subtitle="Пароли больше не нужны — используйте Google или Telegram."
-        />
-        <fieldset className="space-y-2">
-          <legend className="text-sm font-semibold text-[var(--text-primary)]">
-            New to Tutora? Choose how you want to use it
-          </legend>
-          <p className="text-xs text-[var(--text-muted)]">
-            Existing accounts can choose either option — your current role will not change.
-          </p>
-          <div className="grid grid-cols-2 gap-3">
+      {step === "role" ? (
+        <div className="space-y-5">
+          <WizardStepHeader
+            eyebrow="Step 1 of 2"
+            title="How will you use Tutora?"
+            subtitle="Choose a role first. If your account already exists, its saved role will stay unchanged."
+          />
+          <div className="grid gap-3 sm:grid-cols-2">
             <button
               type="button"
-              aria-pressed={intendedRole === "STUDENT"}
-              onClick={() => setIntendedRole("STUDENT")}
-              className={`flex min-h-12 items-center justify-center gap-2 rounded-2xl border px-3 py-2 text-sm font-semibold transition ${
-                intendedRole === "STUDENT"
-                  ? "border-[var(--primary-from)] bg-[var(--primary-soft)] text-[var(--primary-from)] ring-2 ring-[var(--primary-from)]/15"
-                  : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:border-[var(--primary-from)]/50"
-              }`}
+              onClick={() => chooseRole("STUDENT")}
+              className="group rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 text-left transition hover:-translate-y-0.5 hover:border-[var(--primary-from)] hover:shadow-lg"
             >
-              <GraduationCap className="h-4 w-4" /> Student
+              <span className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--primary-soft)] text-[var(--primary-from)]">
+                <GraduationCap className="h-5 w-5" />
+              </span>
+              <span className="block font-bold text-[var(--text-primary)]">I want to learn</span>
+              <span className="mt-1 block text-sm text-[var(--text-muted)]">Find tutors and book lessons.</span>
             </button>
             <button
               type="button"
-              aria-pressed={intendedRole === "TUTOR"}
-              onClick={() => setIntendedRole("TUTOR")}
-              className={`flex min-h-12 items-center justify-center gap-2 rounded-2xl border px-3 py-2 text-sm font-semibold transition ${
-                intendedRole === "TUTOR"
-                  ? "border-[var(--primary-from)] bg-[var(--primary-soft)] text-[var(--primary-from)] ring-2 ring-[var(--primary-from)]/15"
-                  : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:border-[var(--primary-from)]/50"
-              }`}
+              onClick={() => chooseRole("TUTOR")}
+              className="group rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 text-left transition hover:-translate-y-0.5 hover:border-[var(--primary-from)] hover:shadow-lg"
             >
-              <UserRound className="h-4 w-4" /> Tutor
+              <span className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--primary-soft)] text-[var(--primary-from)]">
+                <UserRound className="h-5 w-5" />
+              </span>
+              <span className="block font-bold text-[var(--text-primary)]">I want to teach</span>
+              <span className="mt-1 block text-sm text-[var(--text-muted)]">Build your tutor profile.</span>
             </button>
           </div>
-        </fieldset>
-        {!intendedRole && (
-          <p className="rounded-xl bg-amber-50 px-3 py-2 text-center text-xs font-medium text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-            Choose Student or Tutor before continuing.
-          </p>
-        )}
-        <div className={intendedRole ? "" : "pointer-events-none opacity-50"} aria-disabled={!intendedRole}>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          <button
+            type="button"
+            onClick={() => setStep("role")}
+            className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--text-muted)] transition hover:text-[var(--primary-from)]"
+          >
+            <ArrowLeft className="h-4 w-4" /> Change role
+          </button>
+          <WizardStepHeader
+            eyebrow="Step 2 of 2"
+            title={`Continue as ${role === "TUTOR" ? "a tutor" : "a student"}`}
+            subtitle="Choose Google or Telegram. New users will continue to registration automatically."
+          />
           <GoogleSignInButton
-            intendedRole={intendedRole ?? undefined}
+            intendedRole={role ?? undefined}
+            redirectAfterSuccess={false}
+            onSuccess={handleAuthenticated}
             onError={(message) => toast.error(message)}
-            redirectAfterSuccess
           />
-        </div>
-        <GoogleAuthDivider />
-        <div className={intendedRole ? "" : "pointer-events-none opacity-50"} aria-disabled={!intendedRole}>
+          <GoogleAuthDivider />
           <TelegramSignInButton
-            intendedRole={intendedRole ?? undefined}
+            intendedRole={role ?? undefined}
+            redirectAfterSuccess={false}
+            onSuccess={handleAuthenticated}
             onError={(message) => toast.error(message)}
-            redirectAfterSuccess
           />
+          <div className="flex gap-3 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
+            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
+            <p>No passwords. Authentication is protected by Google or Telegram.</p>
+          </div>
         </div>
-        <div className="flex gap-3 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
-          <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
-          <p>Мы не храним пароли. Доступ защищён вашим аккаунтом Google или Telegram.</p>
-        </div>
-      </div>
+      )}
     </AuthWizardLayout>
   )
 }

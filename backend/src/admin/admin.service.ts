@@ -17,6 +17,7 @@ import {
   tutorMatchesTeachingFormatFilters,
 } from '../common/utils/tutor-lesson-formats.util';
 import { serializeVerificationDocument } from '../storage/verification-document.constants';
+import { NotificationsService } from '../notifications/notifications.service';
 
 type ApplicationFilter = 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'ALL';
 
@@ -25,11 +26,15 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private parseMetadata(searchDocument: string | null) {
     if (!searchDocument) {
-      return { tags: [] as string[], lessonFormats: normalizeLessonFormats([]) };
+      return {
+        tags: [] as string[],
+        lessonFormats: normalizeLessonFormats([]),
+      };
     }
     try {
       const parsed = JSON.parse(searchDocument) as {
@@ -43,7 +48,10 @@ export class AdminService {
         lessonFormats: normalizeLessonFormats(parsed.lessonFormats),
       };
     } catch {
-      return { tags: [] as string[], lessonFormats: normalizeLessonFormats([]) };
+      return {
+        tags: [] as string[],
+        lessonFormats: normalizeLessonFormats([]),
+      };
     }
   }
 
@@ -82,7 +90,7 @@ export class AdminService {
   }
 
   async approveTutor(admin: AuthUser, tutorProfileId: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const tutor = await tx.tutorProfile.findUnique({
         where: { id: tutorProfileId },
       });
@@ -117,15 +125,21 @@ export class AdminService {
         },
       });
 
-      return this.serializeAdminTutorDetail(updated);
+      return {
+        updated,
+        shouldNotify: tutor.verificationStatus !== VerificationStatus.VERIFIED,
+      };
     });
+
+    if (result.shouldNotify) {
+      await this.notifications.notifyTutorVerified({
+        tutorUserId: result.updated.user.id,
+      });
+    }
+    return this.serializeAdminTutorDetail(result.updated);
   }
 
-  async rejectTutor(
-    admin: AuthUser,
-    tutorProfileId: string,
-    reason: string,
-  ) {
+  async rejectTutor(admin: AuthUser, tutorProfileId: string, reason: string) {
     const trimmed = reason.trim();
     if (!trimmed) {
       throw new BadRequestException('Rejection reason is required');
@@ -187,7 +201,7 @@ export class AdminService {
         status,
         rejectionReason:
           status === VerificationStatus.REJECTED
-            ? rejectionReason?.trim() ?? null
+            ? (rejectionReason?.trim() ?? null)
             : null,
         reviewedAt: new Date(),
         reviewerUserId: admin.id,
@@ -216,9 +230,10 @@ export class AdminService {
     };
   }
 
-  filterMarketplaceTutors<
-    T extends { searchDocument: string | null },
-  >(tutors: T[], formatsQuery?: string | string[]) {
+  filterMarketplaceTutors<T extends { searchDocument: string | null }>(
+    tutors: T[],
+    formatsQuery?: string | string[],
+  ) {
     const selectedFormats = parseTeachingFormatQuery(formatsQuery);
     if (selectedFormats.length === 0) return tutors;
 

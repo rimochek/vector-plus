@@ -55,8 +55,11 @@ import {
 } from "@/lib/onboarding/registration-utils"
 import {
   clearStudentDraft,
+  clearStudentStep,
+  loadStudentStep,
   saveSignupRole,
   saveStudentDraft,
+  saveStudentStep,
   type StudentOnboardingDraft,
 } from "@/lib/onboarding/signup-session"
 import type { StepDirection } from "@/app/components/onboarding/animated-step"
@@ -108,7 +111,12 @@ function backTarget(step: StudentStep, draft: StudentOnboardingDraft): StudentSt
 export function StudentSignupFlow() {
   const router = useRouter()
   const { t } = useTranslations()
-  const [step, setStep] = useState<StudentStep>("account")
+  const [step, setStep] = useState<StudentStep>(() => {
+    const saved = loadStudentStep()
+    return saved && ["account", "welcome", "subject", "goal", "format", "budget", "city", "complete"].includes(saved)
+      ? (saved as StudentStep)
+      : "account"
+  })
   const [direction, setDirection] = useState<StepDirection>("forward")
   const [draft, setDraft] = useState<StudentOnboardingDraft>({})
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -179,6 +187,7 @@ export function StudentSignupFlow() {
     setDirection(dir)
     setStep(next)
     setSubmitError(null)
+    saveStudentStep(next)
   }
 
   const scheduleAdvance = (next: StudentStep) => {
@@ -257,6 +266,7 @@ export function StudentSignupFlow() {
       })
 
       clearStudentDraft()
+      clearStudentStep()
       router.push(readReturnToParam() ?? "/tutors")
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Could not save")

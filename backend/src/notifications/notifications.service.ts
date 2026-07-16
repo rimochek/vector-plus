@@ -106,7 +106,18 @@ export class NotificationsService {
       return '/dashboard?tab=messages';
     if (value?.lessonId || type.startsWith('lesson.'))
       return '/dashboard?tab=lessons';
+    if (type === 'tutor.verified') return '/tutor-dashboard?tab=profile';
     return '/dashboard';
+  }
+
+  async notifyTutorVerified(params: { tutorUserId: string }) {
+    return this.createInApp(
+      params.tutorUserId,
+      'tutor.verified',
+      'Your tutor profile is verified',
+      'Your application was approved. Your profile now has the verified badge and is visible to students.',
+      { verified: true },
+    );
   }
 
   async notifyLessonCancelled(params: {

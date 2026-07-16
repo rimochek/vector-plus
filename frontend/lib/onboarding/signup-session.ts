@@ -14,6 +14,7 @@ export function getSignupRole(): SignupRole | null {
 }
 
 const STUDENT_DRAFT_KEY = "tutora-student-onboarding"
+const STUDENT_STEP_KEY = "tutora-student-onboarding-step"
 
 import type { CountryId, CityId } from "@/lib/tutor-locations"
 
@@ -51,6 +52,21 @@ export function loadStudentDraft(): StudentOnboardingDraft | null {
 export function clearStudentDraft(): void {
   if (typeof window === "undefined") return
   sessionStorage.removeItem(STUDENT_DRAFT_KEY)
+}
+
+export function saveStudentStep(step: string): void {
+  if (typeof window === "undefined") return
+  sessionStorage.setItem(STUDENT_STEP_KEY, step)
+}
+
+export function loadStudentStep(): string | null {
+  if (typeof window === "undefined") return null
+  return sessionStorage.getItem(STUDENT_STEP_KEY)
+}
+
+export function clearStudentStep(): void {
+  if (typeof window === "undefined") return
+  sessionStorage.removeItem(STUDENT_STEP_KEY)
 }
 
 const TUTOR_STEP_KEY = "tutora-tutor-onboarding-step"

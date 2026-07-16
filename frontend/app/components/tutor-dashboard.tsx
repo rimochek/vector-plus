@@ -49,7 +49,6 @@ import { DashboardProfileMenu } from "@/app/components/dashboard-profile-menu"
 import { AccountSettingsPanel } from "@/app/components/account-settings-panel"
 import { useLiveDashboardFeed } from "@/lib/use-live-dashboard-feed"
 import { TutorProfileEditor } from "@/app/components/tutor-profile-editor"
-import { TutorApplicationStatusBanner } from "@/app/components/tutor-application-status-banner"
 import { useToast } from "@/lib/toast-context"
 
 type TutorTab =
@@ -805,7 +804,6 @@ export function TutorDashboard() {
           <div key={tab} className="tutora-tab-panel w-full min-w-0 overflow-x-hidden">
           {tab === "overview" && overview && stats && (
             <div className="space-y-6">
-              <TutorApplicationStatusBanner onEditProfile={() => setTab("profile")} />
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
                 <KpiCard
                   icon={Calendar}

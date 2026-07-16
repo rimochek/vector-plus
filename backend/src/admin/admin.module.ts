@@ -7,9 +7,16 @@ import { AuthModule } from '../auth/auth.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [AdminRoleModule, StorageModule, AuthModule, PrismaModule],
+  imports: [
+    AdminRoleModule,
+    StorageModule,
+    AuthModule,
+    PrismaModule,
+    NotificationsModule,
+  ],
   controllers: [AdminController],
   providers: [AdminService, JwtAuthGuard, RolesGuard],
   exports: [AdminService, AdminRoleModule],

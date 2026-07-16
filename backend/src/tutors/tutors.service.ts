@@ -299,12 +299,10 @@ export class TutorsService {
     const updated = await this.prisma.tutorProfile.update({
       where: { id: tutor.id },
       data: {
-        // List in the marketplace immediately after registration.
-        // Verified badge is granted separately by admin review.
-        applicationStatus: TutorApplicationStatus.APPROVED,
+        applicationStatus: TutorApplicationStatus.SUBMITTED,
         verificationStatus: VerificationStatus.UNVERIFIED,
         bio: tutor.bio.trim(),
-        isAcceptingStudents: true,
+        isAcceptingStudents: false,
         applicationSubmittedAt: new Date(),
         applicationRejectionReason: isResubmit ? null : undefined,
         applicationReviewedAt: isResubmit ? null : undefined,
