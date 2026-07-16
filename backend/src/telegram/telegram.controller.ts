@@ -3,7 +3,10 @@ import type { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from '../auth/auth.service';
 import { setRefreshTokenCookie } from '../auth/auth-cookies';
-import { TelegramAuthDto } from './dto/telegram-auth.dto';
+import {
+  TelegramAuthDto,
+  TelegramWidgetAuthDto,
+} from './dto/telegram-auth.dto';
 import { TelegramAuthService } from './telegram-auth.service';
 import { TelegramBotService } from './telegram-bot.service';
 
@@ -25,6 +28,30 @@ export class TelegramController {
     const result = await this.auth.authenticateWithTelegram(
       telegramUser,
       dto.intendedRole,
+    );
+    setRefreshTokenCookie(
+      res,
+      result.refreshToken,
+      result.refreshTokenMaxAgeMs,
+    );
+    return {
+      message: result.message,
+      access_token: result.access_token,
+      existingAccount: result.existingAccount,
+      user: result.user,
+    };
+  }
+
+  @Post('widget')
+  async authenticateWidget(
+    @Body() dto: TelegramWidgetAuthDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { intendedRole, ...widgetData } = dto;
+    const telegramUser = this.telegramAuth.validateWidgetData(widgetData);
+    const result = await this.auth.authenticateWithTelegram(
+      telegramUser,
+      intendedRole,
     );
     setRefreshTokenCookie(
       res,

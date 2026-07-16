@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'crypto';
+import { createHash, createHmac, timingSafeEqual } from 'crypto';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
@@ -9,6 +9,11 @@ export type TelegramUserData = {
   username?: string;
   language_code?: string;
   photo_url?: string;
+};
+
+export type TelegramWidgetData = TelegramUserData & {
+  auth_date: number;
+  hash: string;
 };
 
 @Injectable()
@@ -56,5 +61,42 @@ export class TelegramAuthService {
     } catch {
       throw new UnauthorizedException('Invalid Telegram user data');
     }
+  }
+
+  validateWidgetData(data: TelegramWidgetData): TelegramUserData {
+    const token = this.config.get<string>('TELEGRAM_BOT_TOKEN');
+    if (!token)
+      throw new UnauthorizedException('Telegram login is not configured');
+
+    if (Math.abs(Date.now() / 1000 - data.auth_date) > 5 * 60) {
+      throw new UnauthorizedException('Telegram authorization has expired');
+    }
+
+    const fields = Object.entries(data)
+      .filter(
+        ([key, value]) =>
+          key !== 'hash' && value !== undefined && value !== null,
+      )
+      .map(([key, value]) => `${key}=${String(value)}`)
+      .sort();
+    const secret = createHash('sha256').update(token).digest();
+    const expected = createHmac('sha256', secret)
+      .update(fields.join('\n'))
+      .digest();
+    const received = Buffer.from(data.hash, 'hex');
+    if (
+      received.length !== expected.length ||
+      !timingSafeEqual(received, expected)
+    ) {
+      throw new UnauthorizedException('Invalid Telegram signature');
+    }
+
+    return {
+      id: data.id,
+      first_name: data.first_name,
+      last_name: data.last_name,
+      username: data.username,
+      photo_url: data.photo_url,
+    };
   }
 }
