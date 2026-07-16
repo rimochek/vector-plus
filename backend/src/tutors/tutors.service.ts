@@ -821,6 +821,30 @@ export class TutorsService {
       telegramUsername?: string | null;
       phone?: string | null;
     };
+    const publicVerificationDocuments = dbVerificationDocuments.flatMap(
+      (document) => {
+        if (
+          !('status' in document) ||
+          document.status !== VerificationStatus.VERIFIED
+        ) {
+          return [];
+        }
+
+        return [
+          {
+            id: 'id' in document ? document.id : undefined,
+            type:
+              'type' in document
+                ? document.type
+                : 'documentType' in document
+                  ? document.documentType
+                  : 'OTHER',
+            fileName: document.fileName,
+            status: VerificationStatus.VERIFIED,
+          },
+        ];
+      },
+    );
 
     return {
       id: tutor.id,
@@ -833,7 +857,9 @@ export class TutorsService {
       tags: tagLabels,
       credentials: metadata.credentials,
       verificationDocuments:
-        visibility === 'owner' ? dbVerificationDocuments : undefined,
+        visibility === 'owner'
+          ? dbVerificationDocuments
+          : publicVerificationDocuments,
       languages: metadata.languages,
       occupation: metadata.occupation,
       lessonFormats: metadata.lessonFormats,

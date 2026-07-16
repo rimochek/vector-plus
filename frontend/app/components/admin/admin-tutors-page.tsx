@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import {
   CheckCircle2,
   ExternalLink,
+  FileText,
   Loader2,
   Search,
   Users,
@@ -347,6 +348,22 @@ function TutorApplicationRow({
                 ? ` · ${new Date(tutor.submittedAt).toLocaleDateString()}`
                 : ""}
             </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold text-[var(--text-secondary)]">
+              <FileText className="h-4 w-4 text-[var(--primary)]" />
+              <span>
+                {t("admin.documents")}: {tutor.documentSummary.total}
+              </span>
+              {tutor.documentSummary.pending > 0 ? (
+                <Badge>
+                  {tutor.documentSummary.pending} {t("tutorDash.verification.status.pending")}
+                </Badge>
+              ) : null}
+              {tutor.documentSummary.verified > 0 ? (
+                <Badge>
+                  {tutor.documentSummary.verified} {t("tutorDash.verification.status.verified")}
+                </Badge>
+              ) : null}
+            </div>
           </div>
         </div>
         <Button variant="secondary" className="shrink-0" onClick={onReview}>

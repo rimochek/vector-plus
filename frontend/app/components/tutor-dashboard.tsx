@@ -412,6 +412,7 @@ export function TutorDashboard() {
   const [cancelBookingId, setCancelBookingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [availabilityDirty, setAvailabilityDirty] = useState(false)
+  const [profileDirty, setProfileDirty] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const { unreadNotifications, conversations, refresh: refreshLiveFeed } =
     useLiveDashboardFeed(ready)
@@ -511,6 +512,10 @@ export function TutorDashboard() {
 
   const handleTabChange = (next: TutorTab) => {
     if (tab === "availability" && availabilityDirty && next !== "availability") {
+      toast.warning(t("toast.unsavedChanges"))
+      return
+    }
+    if (tab === "profile" && profileDirty && next !== "profile") {
       toast.warning(t("toast.unsavedChanges"))
       return
     }
@@ -1085,6 +1090,7 @@ export function TutorDashboard() {
               <TutorProfileEditor
                 tutorProfileId={overview?.tutorProfileId}
                 onSaved={refreshDashboard}
+                onDirtyChange={setProfileDirty}
               />
             </DashboardCard>
           )}

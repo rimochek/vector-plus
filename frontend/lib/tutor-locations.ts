@@ -114,3 +114,38 @@ export function resolveLocationLabels(
   }
   return { country, city: LOCATION_LABELS_EN[cityId] ?? cityId }
 }
+
+export function resolveLocationSelection(
+  country: string | null | undefined,
+  city: string | null | undefined,
+): {
+  countryId: CountryId | ""
+  cityId: CityId | ""
+  customCountry: string
+  customCity: string
+} {
+  const storedCountry = country?.trim() ?? ""
+  const storedCity = city?.trim() ?? ""
+  if (!storedCountry && !storedCity) {
+    return { countryId: "", cityId: "", customCountry: "", customCity: "" }
+  }
+
+  const countryMatch = TUTOR_LOCATION_COUNTRIES.find(
+    ({ id }) =>
+      LOCATION_LABELS_EN[id]?.toLocaleLowerCase() ===
+      storedCountry.toLocaleLowerCase(),
+  )
+  const countryId: CountryId = countryMatch?.id ?? "other"
+  const cityMatch = countryMatch?.cities.find(
+    (id) =>
+      id !== CITY_OTHER_ID &&
+      LOCATION_LABELS_EN[id]?.toLocaleLowerCase() === storedCity.toLocaleLowerCase(),
+  )
+
+  return {
+    countryId,
+    cityId: cityMatch ?? (storedCity ? CITY_OTHER_ID : ""),
+    customCountry: countryId === "other" ? storedCountry : "",
+    customCity: !cityMatch ? storedCity : "",
+  }
+}

@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { ExternalLink, Loader2 } from "lucide-react"
+import { Check, ExternalLink, Loader2 } from "lucide-react"
 import { useTranslations } from "@/lib/i18n/locale-context"
 import { api, type ApiTutor } from "@/lib/api-client"
 import { formatTenge } from "@/lib/currency"
@@ -29,6 +29,16 @@ import {
 import { Chip } from "@/app/components/ui/chip"
 import { Button, ButtonLink } from "@/app/components/ui/button"
 import { FormField, Input, Textarea } from "@/app/components/ui/form-field"
+import {
+  CountryCityPicker,
+  isLocationComplete,
+} from "@/app/components/onboarding/country-city-picker"
+import {
+  resolveLocationLabels,
+  resolveLocationSelection,
+  type CityId,
+  type CountryId,
+} from "@/lib/tutor-locations"
 
 const HOURLY_RATE = {
   min: 1000,
@@ -48,12 +58,91 @@ const PRESET_TAG_SET = new Set<string>([
   ...LEGACY_TOPIC_IDS,
 ])
 
+function LargeCheckbox({
+  checked,
+  onChange,
+  label,
+  description,
+  disabled = false,
+}: {
+  checked: boolean
+  onChange: (checked: boolean) => void
+  label: string
+  description?: string
+  disabled?: boolean
+}) {
+  return (
+    <label
+      className={`flex items-start gap-4 rounded-2xl border p-4 transition duration-150 ${
+        disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+      } ${
+        checked
+          ? "border-[var(--primary)] bg-[var(--primary-soft)]"
+          : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--primary)]/50"
+      }`}
+    >
+      <input
+        type="checkbox"
+        className="sr-only"
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <span
+        aria-hidden
+        className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border-2 transition ${
+          checked
+            ? "border-[var(--primary)] bg-[var(--primary)] text-white"
+            : "border-[var(--border-strong)] bg-[var(--surface)] text-transparent"
+        }`}
+      >
+        <Check className="h-5 w-5" strokeWidth={3} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-bold text-[var(--text-primary)]">
+          {label}
+        </span>
+        {description ? (
+          <span className="mt-1 block text-xs leading-relaxed text-[var(--text-muted)]">
+            {description}
+          </span>
+        ) : null}
+      </span>
+    </label>
+  )
+}
+
+type ProfileFormSnapshot = {
+  displayName: string
+  headline: string
+  bio: string
+  hourlyRate: number
+  experienceYears: number
+  education: string
+  countryId: CountryId | ""
+  cityId: CityId | ""
+  customCountry: string
+  customCity: string
+  tags: string[]
+  lessonFormats: TutorLessonFormat[]
+  telegramUsername: string
+  phone: string
+  showTelegramPublicly: boolean
+  showPhonePublicly: boolean
+  acceptsDirectRequests: boolean
+}
+
+const serializeProfileForm = (values: ProfileFormSnapshot) =>
+  JSON.stringify(values)
+
 export function TutorProfileEditor({
   tutorProfileId,
   onSaved,
+  onDirtyChange,
 }: {
   tutorProfileId?: string
   onSaved?: () => void
+  onDirtyChange?: (dirty: boolean) => void
 }) {
   const { t } = useTranslations()
   const toast = useToast()
@@ -65,8 +154,10 @@ export function TutorProfileEditor({
   const [hourlyRate, setHourlyRate] = useState<number>(HOURLY_RATE.min)
   const [experienceYears, setExperienceYears] = useState(0)
   const [education, setEducation] = useState("")
-  const [country, setCountry] = useState("")
-  const [city, setCity] = useState("")
+  const [countryId, setCountryId] = useState<CountryId | "">("")
+  const [cityId, setCityId] = useState<CityId | "">("")
+  const [customCountry, setCustomCountry] = useState("")
+  const [customCity, setCustomCity] = useState("")
   const [avatarUrl, setAvatarUrl] = useState("")
   const [tags, setTags] = useState<string[]>([])
   const [lessonFormats, setLessonFormats] = useState<TutorLessonFormat[]>(["online"])
@@ -76,34 +167,95 @@ export function TutorProfileEditor({
   >([])
   const [telegramUsername, setTelegramUsername] = useState("")
   const [phone, setPhone] = useState("")
-  const [preferredContactMethod, setPreferredContactMethod] = useState<
-    "TELEGRAM" | "PHONE" | "BOTH"
-  >("TELEGRAM")
   const [showTelegramPublicly, setShowTelegramPublicly] = useState(false)
   const [showPhonePublicly, setShowPhonePublicly] = useState(false)
   const [acceptsDirectRequests, setAcceptsDirectRequests] = useState(true)
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null)
+
+  const currentSnapshot = useMemo(
+    () =>
+      serializeProfileForm({
+        displayName,
+        headline,
+        bio,
+        hourlyRate,
+        experienceYears,
+        education,
+        countryId,
+        cityId,
+        customCountry,
+        customCity,
+        tags,
+        lessonFormats,
+        telegramUsername,
+        phone,
+        showTelegramPublicly,
+        showPhonePublicly,
+        acceptsDirectRequests,
+      }),
+    [
+      acceptsDirectRequests,
+      bio,
+      cityId,
+      countryId,
+      customCity,
+      customCountry,
+      displayName,
+      education,
+      experienceYears,
+      headline,
+      hourlyRate,
+      lessonFormats,
+      phone,
+      showPhonePublicly,
+      showTelegramPublicly,
+      tags,
+      telegramUsername,
+    ],
+  )
+  const dirty = savedSnapshot !== null && savedSnapshot !== currentSnapshot
 
   useEffect(() => {
     api.tutors
       .ownProfile()
       .then((profile: ApiTutor) => {
+        const location = resolveLocationSelection(profile.country, profile.city)
+        const normalizedLessonFormats = normalizeLessonFormats(profile.lessonFormats)
+        const snapshot = serializeProfileForm({
+          displayName: profile.displayName,
+          headline: profile.headline ?? "",
+          bio: profile.bio,
+          hourlyRate: Math.round(profile.defaultHourlyRateCents / 100),
+          experienceYears: profile.experienceYears ?? 0,
+          education: profile.education ?? "",
+          ...location,
+          tags: profile.tags ?? [],
+          lessonFormats: normalizedLessonFormats,
+          telegramUsername: profile.telegramUsername ?? "",
+          phone: profile.phone ?? "",
+          showTelegramPublicly: profile.showTelegramPublicly ?? false,
+          showPhonePublicly: profile.showPhonePublicly ?? false,
+          acceptsDirectRequests: profile.acceptsDirectRequests ?? true,
+        })
         setDisplayName(profile.displayName)
         setHeadline(profile.headline ?? "")
         setBio(profile.bio)
         setHourlyRate(Math.round(profile.defaultHourlyRateCents / 100))
         setExperienceYears(profile.experienceYears ?? 0)
         setEducation(profile.education ?? "")
-        setCountry(profile.country ?? "")
-        setCity(profile.city ?? "")
+        setCountryId(location.countryId)
+        setCityId(location.cityId)
+        setCustomCountry(location.customCountry)
+        setCustomCity(location.customCity)
         setAvatarUrl(profile.avatarUrl ?? "")
         setTags(profile.tags ?? [])
-        setLessonFormats(normalizeLessonFormats(profile.lessonFormats))
+        setLessonFormats(normalizedLessonFormats)
         setTelegramUsername(profile.telegramUsername ?? "")
         setPhone(profile.phone ?? "")
-        setPreferredContactMethod(profile.preferredContactMethod ?? "TELEGRAM")
         setShowTelegramPublicly(profile.showTelegramPublicly ?? false)
         setShowPhonePublicly(profile.showPhonePublicly ?? false)
         setAcceptsDirectRequests(profile.acceptsDirectRequests ?? true)
+        setSavedSnapshot(snapshot)
       })
       .catch(() => toast.error(t("tutorDash.profileEdit.loadError")))
       .finally(() => setLoading(false))
@@ -112,6 +264,54 @@ export function TutorProfileEditor({
       .then(setVerificationDocuments)
       .catch(() => undefined)
   }, [t, toast])
+
+  useEffect(() => {
+    onDirtyChange?.(dirty)
+  }, [dirty, onDirtyChange])
+
+  useEffect(
+    () => () => {
+      onDirtyChange?.(false)
+    },
+    [onDirtyChange],
+  )
+
+  useEffect(() => {
+    if (!dirty) return
+
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ""
+    }
+    const blockLinkNavigation = (event: MouseEvent) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+      const anchor = target.closest<HTMLAnchorElement>("a[href]")
+      if (!anchor || anchor.target === "_blank" || anchor.hasAttribute("download")) {
+        return
+      }
+
+      const nextUrl = new URL(anchor.href, window.location.href)
+      const currentUrl = new URL(window.location.href)
+      if (
+        nextUrl.pathname === currentUrl.pathname &&
+        nextUrl.search === currentUrl.search
+      ) {
+        return
+      }
+
+      event.preventDefault()
+      event.stopPropagation()
+      toast.warning(t("toast.unsavedChanges"))
+    }
+
+    window.addEventListener("beforeunload", warnBeforeUnload)
+    document.addEventListener("click", blockLinkNavigation, true)
+    return () => {
+      window.removeEventListener("beforeunload", warnBeforeUnload)
+      document.removeEventListener("click", blockLinkNavigation, true)
+    }
+  }, [dirty, t, toast])
 
   const toggleTag = (id: string) => {
     setTags((prev) =>
@@ -139,6 +339,38 @@ export function TutorProfileEditor({
       toast.error(t("tutorDash.profileEdit.lessonFormatRequired"))
       return
     }
+    if (
+      !isLocationComplete(
+        countryId,
+        cityId,
+        customCountry,
+        customCity,
+      )
+    ) {
+      toast.error(t("tutorDash.profileEdit.locationRequired"))
+      return
+    }
+
+    const location = resolveLocationLabels(
+      countryId as CountryId,
+      cityId,
+      customCity,
+      customCountry,
+    )
+    const hasTelegram = Boolean(telegramUsername.trim())
+    const hasPhone = Boolean(phone.trim())
+    const preferredContactMethod =
+      showTelegramPublicly && hasTelegram && showPhonePublicly && hasPhone
+        ? "BOTH"
+        : showTelegramPublicly && hasTelegram
+          ? "TELEGRAM"
+          : showPhonePublicly && hasPhone
+            ? "PHONE"
+            : hasTelegram && hasPhone
+              ? "BOTH"
+              : hasTelegram
+                ? "TELEGRAM"
+                : "PHONE"
 
     setSaving(true)
     try {
@@ -149,8 +381,8 @@ export function TutorProfileEditor({
         defaultHourlyRateCents: hourlyRate * 100,
         experienceYears,
         education: education.trim(),
-        country: country.trim(),
-        city: city.trim(),
+        country: location.country,
+        city: location.city,
         tags,
         lessonFormats,
         telegramUsername: telegramUsername.trim() || undefined,
@@ -160,6 +392,7 @@ export function TutorProfileEditor({
         showPhonePublicly,
         acceptsDirectRequests,
       })
+      setSavedSnapshot(currentSnapshot)
       toast.success(t("tutorDash.profileEdit.saved"))
       onSaved?.()
     } catch (err) {
@@ -290,17 +523,17 @@ export function TutorProfileEditor({
         />
       </FormField>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <FormField label={t("tutorDash.profileEdit.country")}>
-          <Input
-            value={country}
-            onChange={(event) => setCountry(event.target.value)}
-          />
-        </FormField>
-
-        <FormField label={t("tutorDash.profileEdit.city")}>
-          <Input value={city} onChange={(event) => setCity(event.target.value)} />
-        </FormField>
+      <div className="rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface-secondary)] p-5">
+        <CountryCityPicker
+          countryId={countryId}
+          cityId={cityId}
+          customCountry={customCountry}
+          customCity={customCity}
+          onCountryChange={setCountryId}
+          onCityChange={setCityId}
+          onCustomCountryChange={setCustomCountry}
+          onCustomCityChange={setCustomCity}
+        />
       </div>
 
       <div>
@@ -344,58 +577,47 @@ export function TutorProfileEditor({
           <FormField label={t("lead.field.telegram")}>
             <Input
               value={telegramUsername}
-              onChange={(event) => setTelegramUsername(event.target.value)}
+              onChange={(event) => {
+                setTelegramUsername(event.target.value)
+                if (!event.target.value.trim()) setShowTelegramPublicly(false)
+              }}
               placeholder="@username"
             />
           </FormField>
           <FormField label={t("lead.field.phone")}>
             <Input
               value={phone}
-              onChange={(event) => setPhone(event.target.value)}
+              onChange={(event) => {
+                setPhone(event.target.value)
+                if (!event.target.value.trim()) setShowPhonePublicly(false)
+              }}
               placeholder="+77000000000"
             />
           </FormField>
         </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {(["TELEGRAM", "PHONE", "BOTH"] as const).map((method) => (
-            <Chip
-              key={method}
-              selected={preferredContactMethod === method}
-              onClick={() => setPreferredContactMethod(method)}
-            >
-              {method === "BOTH"
-                ? `${t("lead.telegram")} + ${t("lead.phone")}`
-                : method === "TELEGRAM"
-                  ? t("lead.telegram")
-                  : t("lead.phone")}
-            </Chip>
-          ))}
-        </div>
-        <div className="mt-4 space-y-2 text-sm">
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={showTelegramPublicly}
-              onChange={(event) => setShowTelegramPublicly(event.target.checked)}
-            />
-            {t("lead.openTelegram")} ({t("lead.field.telegram")})
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={showPhonePublicly}
-              onChange={(event) => setShowPhonePublicly(event.target.checked)}
-            />
-            {t("lead.call")} ({t("lead.field.phone")})
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
+        <div className="mt-5 grid gap-3 lg:grid-cols-2">
+          <LargeCheckbox
+            checked={showTelegramPublicly}
+            onChange={setShowTelegramPublicly}
+            disabled={!telegramUsername.trim()}
+            label={t("lead.openTelegram")}
+            description={t("tutorDash.profileEdit.showTelegramHint")}
+          />
+          <LargeCheckbox
+            checked={showPhonePublicly}
+            onChange={setShowPhonePublicly}
+            disabled={!phone.trim()}
+            label={t("lead.call")}
+            description={t("tutorDash.profileEdit.showPhoneHint")}
+          />
+          <div className="lg:col-span-2">
+            <LargeCheckbox
               checked={acceptsDirectRequests}
-              onChange={(event) => setAcceptsDirectRequests(event.target.checked)}
+              onChange={setAcceptsDirectRequests}
+              label={t("lead.leaveRequest")}
+              description={t("tutorDash.profileEdit.directRequestsHint")}
             />
-            {t("lead.leaveRequest")}
-          </label>
+          </div>
         </div>
       </div>
 

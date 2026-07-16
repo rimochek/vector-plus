@@ -102,9 +102,10 @@ export type ApiTutor = {
   credentials?: { label: string; value: string }[]
   verificationDocuments?: Array<{
     id?: string
-    type: string
+    type?: string
+    documentType?: string
     fileName: string
-    storageKey: string
+    storageKey?: string
     status?: string
     rejectionReason?: string | null
   }>

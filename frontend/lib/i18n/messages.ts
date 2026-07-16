@@ -360,6 +360,13 @@ export const messagesEn = {
   "tutorDash.profileEdit.lessonFormatHint":
     "Choose how you teach — online, in person, or both.",
   "tutorDash.profileEdit.lessonFormatRequired": "Select at least one teaching format.",
+  "tutorDash.profileEdit.locationRequired": "Choose a country and city.",
+  "tutorDash.profileEdit.showTelegramHint":
+    "Show a Telegram contact button on your public profile.",
+  "tutorDash.profileEdit.showPhoneHint":
+    "Show a phone contact button on your public profile.",
+  "tutorDash.profileEdit.directRequestsHint":
+    "Allow students to send lesson requests through Tutora.",
   "tutorDash.profileEdit.avatarPhoto": "Profile photo",
   "tutorDash.profileEdit.avatarHint": "Upload a clear photo. JPG, PNG, or WebP up to 5 MB.",
   "tutorDash.profileEdit.avatarChange": "Change photo",
@@ -1279,6 +1286,13 @@ export const messagesRu: Record<MessageId, string> = {
   "tutorDash.profileEdit.lessonFormatHint":
     "Выберите, как вы преподаёте — онлайн, очно или оба варианта.",
   "tutorDash.profileEdit.lessonFormatRequired": "Выберите хотя бы один формат занятий.",
+  "tutorDash.profileEdit.locationRequired": "Выберите страну и город.",
+  "tutorDash.profileEdit.showTelegramHint":
+    "Показывать кнопку Telegram в публичном профиле.",
+  "tutorDash.profileEdit.showPhoneHint":
+    "Показывать кнопку телефона в публичном профиле.",
+  "tutorDash.profileEdit.directRequestsHint":
+    "Разрешить ученикам отправлять заявки на занятия через Tutora.",
   "tutorDash.profileEdit.avatarPhoto": "Фото профиля",
   "tutorDash.profileEdit.avatarHint": "Загрузите чёткое фото. JPG, PNG или WebP до 5 МБ.",
   "tutorDash.profileEdit.avatarChange": "Изменить фото",

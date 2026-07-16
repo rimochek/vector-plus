@@ -26,6 +26,30 @@ describe('TutorsService public serialization', () => {
     showPhonePublicly: false,
     telegramUsername: 'private_handle',
     phone: '+77000000000',
+    verificationDocuments: [
+      {
+        id: 'verified-doc',
+        documentType: 'TEACHING_CERTIFICATE',
+        displayFileName: 'Teaching certificate.pdf',
+        objectKey: 'private/verified-doc.pdf',
+        status: 'VERIFIED',
+        uploadedAt: new Date('2026-01-01T00:00:00.000Z'),
+        sizeBytes: 1024,
+        mimeType: 'application/pdf',
+        metadata: { documentCategory: 'TEACHING_CERTIFICATE' },
+      },
+      {
+        id: 'pending-doc',
+        documentType: 'OTHER',
+        displayFileName: 'Pending document.pdf',
+        objectKey: 'private/pending-doc.pdf',
+        status: 'PENDING',
+        uploadedAt: new Date('2026-01-02T00:00:00.000Z'),
+        sizeBytes: 1024,
+        mimeType: 'application/pdf',
+        metadata: { documentCategory: 'OTHER' },
+      },
+    ],
   };
 
   const service = new TutorsService({} as never);
@@ -48,5 +72,21 @@ describe('TutorsService public serialization', () => {
 
     expect(result.phone).toBe('+77000000000');
     expect(result.telegramUsername).toBe('private_handle');
+  });
+
+  it('exposes only safe metadata for verified documents publicly', () => {
+    const result = (service as unknown as {
+      serializeTutor(value: typeof tutor, visibility: 'public'): Record<string, unknown>;
+    }).serializeTutor(tutor, 'public');
+    const documents = result.verificationDocuments as Array<Record<string, unknown>>;
+
+    expect(documents).toEqual([
+      expect.objectContaining({
+        id: 'verified-doc',
+        fileName: 'Teaching certificate.pdf',
+        status: 'VERIFIED',
+      }),
+    ]);
+    expect(documents[0].storageKey).toBeUndefined();
   });
 });
