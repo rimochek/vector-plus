@@ -1,9 +1,9 @@
-"use client"
+"use client";
 
-import { useEffect, useState, type ReactNode } from "react"
-import { createPortal } from "react-dom"
-import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
   Calendar,
@@ -16,60 +16,68 @@ import {
   Sun,
   User,
   X,
-} from "lucide-react"
-import { useStoredTheme } from "@/lib/use-stored-theme"
-import { useTranslations } from "@/lib/i18n/locale-context"
-import { useAuthSession } from "@/lib/use-auth-session"
+} from "lucide-react";
+import { useStoredTheme } from "@/lib/use-stored-theme";
+import { useTranslations } from "@/lib/i18n/locale-context";
 import {
   DEFAULT_AUTH_ROUTE,
   dashboardTabHref,
   logout,
-} from "@/lib/auth-client"
-import { NotificationMenu } from "@/app/components/notification-menu"
-import { ProfileMenu } from "@/app/components/profile-menu"
-import { TutoraLogo } from "@/app/components/ui/tutora-logo"
-import { Container } from "@/app/components/ui/container"
+  type StoredUser,
+} from "@/lib/auth-client";
+import { NotificationMenu } from "@/app/components/notification-menu";
+import { ProfileMenu } from "@/app/components/profile-menu";
+import { TutoraLogo } from "@/app/components/ui/tutora-logo";
+import { Container } from "@/app/components/ui/container";
 
 function NavIconButton({
   href,
   label,
   children,
 }: {
-  href?: string
-  label: string
-  children: ReactNode
+  href?: string;
+  label: string;
+  children: ReactNode;
 }) {
   const className =
-    "relative flex h-10 w-10 items-center justify-center rounded-[var(--radius-button)] border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] transition duration-150 ease-in-out hover:bg-[var(--chip)] hover:text-[var(--text-primary)]"
+    "relative flex h-10 w-10 items-center justify-center rounded-[var(--radius-button)] border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] transition duration-150 ease-in-out hover:bg-[var(--chip)] hover:text-[var(--text-primary)]";
 
   if (href) {
     return (
       <Link href={href} aria-label={label} className={className}>
         {children}
       </Link>
-    )
+    );
   }
 
   return (
     <button type="button" aria-label={label} className={className}>
       {children}
     </button>
-  )
+  );
 }
 
-export const Navigation = () => {
-  const [isOpen, setIsOpen] = useState(false)
-  const [mounted, setMounted] = useState(false)
-  const pathname = usePathname()
-  const router = useRouter()
-  const { t, locale, setLocale } = useTranslations()
-  const { darkMode, toggleTheme } = useStoredTheme()
-  const { user, isLoggedIn, ready } = useAuthSession()
+type NavigationProps = {
+  session: {
+    user: StoredUser | null;
+    isLoggedIn: boolean;
+    ready: boolean;
+  };
+};
 
-  const closeMenu = () => setIsOpen(false)
-  const isTutor = (user?.role ?? user?.roles?.[0]) === "tutor"
-  const conversationsHref = dashboardTabHref("chats", user)
-  const notificationsHref = dashboardTabHref("notifications", user)
+export const Navigation = ({ session }: NavigationProps) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const pathname = usePathname();
+  const router = useRouter();
+  const { t, locale, setLocale } = useTranslations();
+  const { darkMode, toggleTheme } = useStoredTheme();
+  const { user, isLoggedIn, ready } = session;
+
+  const closeMenu = () => setIsOpen(false);
+  const isTutor = (user?.role ?? user?.roles?.[0]) === "tutor";
+  const conversationsHref = dashboardTabHref("chats", user);
+  const notificationsHref = dashboardTabHref("notifications", user);
   const mobileAccountItems = [
     {
       href: isTutor ? "/tutor-dashboard" : "/dashboard",
@@ -81,12 +89,22 @@ export const Navigation = () => {
       label: t("dash.tab.lessons"),
       icon: Calendar,
     },
-    { href: conversationsHref, label: t("dash.tab.chats"), icon: MessageSquare },
+    {
+      href: conversationsHref,
+      label: t("dash.tab.chats"),
+      icon: MessageSquare,
+    },
     { href: notificationsHref, label: t("dash.tab.notifications"), icon: Bell },
     ...(!isTutor
-      ? [{ href: dashboardTabHref("favorites", user), label: t("dash.tab.favorites"), icon: Heart }]
+      ? [
+          {
+            href: dashboardTabHref("favorites", user),
+            label: t("dash.tab.favorites"),
+            icon: Heart,
+          },
+        ]
       : []),
-  ]
+  ];
 
   const centerNav = isLoggedIn
     ? isTutor
@@ -99,32 +117,32 @@ export const Navigation = () => {
         { href: "/tutors", label: t("nav.findTutors") },
         { href: "/signup/tutor", label: t("nav.becomeTutor") },
         { href: "/login", label: t("nav.forTutors") },
-      ]
+      ];
 
   const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href.split("?")[0])
+    href === "/" ? pathname === "/" : pathname.startsWith(href.split("?")[0]);
 
-  useEffect(() => setMounted(true), [])
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
-    if (!isOpen) return
-    const prev = document.body.style.overflow
-    document.body.style.overflow = "hidden"
+    if (!isOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = prev
-    }
-  }, [isOpen])
+      document.body.style.overflow = prev;
+    };
+  }, [isOpen]);
 
   useEffect(() => {
-    setIsOpen(false)
-  }, [pathname])
+    setIsOpen(false);
+  }, [pathname]);
 
   const handleLogout = () => {
-    closeMenu()
-    void logout().then(() => router.push("/login"))
-  }
+    closeMenu();
+    void logout().then(() => router.push("/login"));
+  };
 
-  const logoHref = isLoggedIn ? DEFAULT_AUTH_ROUTE : "/"
+  const logoHref = isLoggedIn ? DEFAULT_AUTH_ROUTE : "/";
 
   return (
     <header
@@ -159,7 +177,11 @@ export const Navigation = () => {
               aria-label={darkMode ? t("theme.lightAria") : t("theme.darkAria")}
               className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-button)] border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] transition duration-150 hover:bg-[var(--chip)] hover:text-[var(--text-primary)]"
             >
-              {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              {darkMode ? (
+                <Sun className="h-4 w-4" />
+              ) : (
+                <Moon className="h-4 w-4" />
+              )}
             </button>
 
             <button
@@ -218,7 +240,11 @@ export const Navigation = () => {
       {mounted &&
         isOpen &&
         createPortal(
-          <div className="fixed inset-0 z-[200] lg:hidden" role="dialog" aria-modal>
+          <div
+            className="fixed inset-0 z-[200] lg:hidden"
+            role="dialog"
+            aria-modal
+          >
             <button
               type="button"
               className="absolute inset-0 bg-black/40 backdrop-blur-sm"
@@ -270,7 +296,7 @@ export const Navigation = () => {
                 {ready && isLoggedIn && (
                   <div className="mt-4 border-t border-[var(--border)] pt-4">
                     {mobileAccountItems.map((item) => {
-                      const Icon = item.icon
+                      const Icon = item.icon;
                       return (
                         <Link
                           key={item.href}
@@ -281,7 +307,7 @@ export const Navigation = () => {
                           <Icon className="h-4 w-4 shrink-0 text-[var(--primary)]" />
                           {item.label}
                         </Link>
-                      )
+                      );
                     })}
                     <button
                       type="button"
@@ -299,5 +325,5 @@ export const Navigation = () => {
           document.body,
         )}
     </header>
-  )
-}
+  );
+};
