@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ExternalLink,
   Loader2,
+  Search,
   Users,
   XCircle,
 } from "lucide-react"
@@ -361,11 +362,15 @@ export function AdminTutorsPage() {
   const { t } = useTranslations()
   const toast = useToast()
   const [ready, setReady] = useState(false)
-  const [status, setStatus] = useState<StatusFilter>("SUBMITTED")
+  const [status, setStatus] = useState<StatusFilter>("APPROVED")
+  const [search, setSearch] = useState("")
   const [tutors, setTutors] = useState<AdminTutorSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedDetail, setSelectedDetail] = useState<AdminTutorDetail | null>(null)
+  const visibleTutors = tutors.filter((tutor) =>
+    tutor.displayName.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()),
+  )
 
   useEffect(() => {
     if (!isLoggedIn()) {
@@ -447,19 +452,31 @@ export function AdminTutorsPage() {
         ariaLabel={t("admin.filterLabel")}
       />
 
+      <label className="relative mt-5 block">
+        <span className="sr-only">Search tutors by name</span>
+        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+        <input
+          type="search"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search tutors by name"
+          className="min-h-12 w-full rounded-[var(--radius-button)] border border-[var(--border)] bg-[var(--surface)] py-3 pl-11 pr-4 text-sm text-[var(--text-primary)] outline-none transition placeholder:text-[var(--text-muted)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary-soft)]"
+        />
+      </label>
+
       <div className="mt-6 space-y-4">
         {loading ? (
           <div className="flex justify-center py-16">
             <Loader2 className="h-8 w-8 animate-spin text-[var(--primary)]" />
           </div>
-        ) : tutors.length === 0 ? (
+        ) : visibleTutors.length === 0 ? (
           <EmptyState
             icon={Users}
             title={t("admin.empty")}
             description={t("admin.emptyHint")}
           />
         ) : (
-          tutors.map((tutor) => (
+          visibleTutors.map((tutor) => (
             <TutorApplicationRow
               key={tutor.id}
               tutor={tutor}

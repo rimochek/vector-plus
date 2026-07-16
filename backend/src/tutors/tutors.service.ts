@@ -299,10 +299,12 @@ export class TutorsService {
     const updated = await this.prisma.tutorProfile.update({
       where: { id: tutor.id },
       data: {
-        applicationStatus: TutorApplicationStatus.SUBMITTED,
+        // Publish a completed profile immediately. Verification remains a
+        // separate admin decision and only controls the verified badge.
+        applicationStatus: TutorApplicationStatus.APPROVED,
         verificationStatus: VerificationStatus.UNVERIFIED,
         bio: tutor.bio.trim(),
-        isAcceptingStudents: false,
+        isAcceptingStudents: true,
         applicationSubmittedAt: new Date(),
         applicationRejectionReason: isResubmit ? null : undefined,
         applicationReviewedAt: isResubmit ? null : undefined,

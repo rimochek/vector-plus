@@ -20,13 +20,20 @@ export function useAuthSession() {
   }, [])
 
   useEffect(() => {
-    refresh()
-    if (isLoggedIn()) {
-      void refreshCurrentUser().then(() => refresh())
+    let cancelled = false
+
+    const bootstrap = async () => {
+      if (isLoggedIn()) {
+        await refreshCurrentUser()
+      }
+      if (!cancelled) refresh()
     }
+
+    void bootstrap()
     window.addEventListener("storage", refresh)
     window.addEventListener("vector-auth-change", refresh)
     return () => {
+      cancelled = true
       window.removeEventListener("storage", refresh)
       window.removeEventListener("vector-auth-change", refresh)
     }

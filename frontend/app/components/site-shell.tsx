@@ -2,7 +2,6 @@
 
 import { ReactNode } from "react"
 import { usePathname } from "next/navigation"
-import { isLoggedIn } from "@/lib/auth-client"
 import { useAuthSession } from "@/lib/use-auth-session"
 import { Footer } from "@/app/components/footer"
 import { LandingNavbar } from "@/app/components/landing/navbar"
@@ -13,8 +12,9 @@ export const SiteShell = ({ children }: { children: ReactNode }) => {
   const { isLoggedIn: loggedIn, ready } = useAuthSession()
   const isAppDashboard =
     pathname.startsWith("/tutor-dashboard") || pathname === "/dashboard"
-  const showLandingNav =
-    !isAppDashboard && (ready ? !loggedIn : !isLoggedIn())
+  // Keep the server render and the first browser render identical. Reading
+  // localStorage here before hydration produced two different header trees.
+  const showLandingNav = !isAppDashboard && (!ready || !loggedIn)
 
   return (
     <div className="flex min-h-screen w-full max-w-[100vw] flex-col bg-[var(--bg)] text-[var(--text-primary)] selection:bg-[var(--glow)] selection:text-[var(--text-primary)]">

@@ -115,7 +115,7 @@ export class NotificationsService {
       params.tutorUserId,
       'tutor.verified',
       'Your tutor profile is verified',
-      'Your application was approved. Your profile now has the verified badge and is visible to students.',
+      'An administrator verified your profile. Your tutor page now displays the verified badge.',
       { verified: true },
     );
   }

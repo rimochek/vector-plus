@@ -9,9 +9,9 @@ import {
 import { ButtonLink } from "@/app/components/ui/button"
 
 const TIMELINE = [
-  "Application submitted",
-  "Profile review",
-  "Profile approved and published",
+  "Profile published",
+  "Available to students",
+  "Optional verified badge review",
 ]
 
 export default function TutorSignupSuccessPage() {
@@ -23,11 +23,11 @@ export default function TutorSignupSuccessPage() {
         </div>
         <div className="space-y-2">
           <h1 className="text-2xl font-black sm:text-3xl">
-            Your profile has been submitted
+            Your tutor profile is live
           </h1>
           <p className="text-sm text-[var(--text-secondary)] sm:text-base">
-            We&apos;ll review the information you provided. You can continue to your
-            dashboard and update your profile while it is under review.
+            Students can now find your profile and request lessons. An administrator
+            may review it separately to grant the verified badge.
           </p>
         </div>
         <ol className="space-y-3 text-left">
