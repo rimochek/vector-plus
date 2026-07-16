@@ -280,6 +280,9 @@ export class TutorsService {
     if (tutor.defaultHourlyRateCents < 1000) {
       errors.push('Hourly rate is required');
     }
+    if (!tutor.telegramUsername?.trim() && !tutor.phone?.trim()) {
+      errors.push('A Telegram username or phone number is required');
+    }
 
     if (errors.length) {
       throw new BadRequestException(errors.join('. '));

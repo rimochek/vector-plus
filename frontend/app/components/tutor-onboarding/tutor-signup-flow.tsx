@@ -77,6 +77,7 @@ const TUTOR_STEPS = [
   "price",
   "format",
   "availability",
+  "contact",
   "review",
 ] as const
 
@@ -101,7 +102,8 @@ function progressForStep(step: TutorStep): number {
     price: 4,
     format: 4,
     availability: 4,
-    review: 5,
+    contact: 5,
+    review: 6,
   }
   return map[step]
 }
@@ -116,7 +118,8 @@ function backMap(step: TutorStep): TutorStep | null {
   if (step === "about") return "headline"
   if (step === "format") return "price"
   if (step === "availability") return "format"
-  if (step === "review") return "availability"
+  if (step === "contact") return "availability"
+  if (step === "review") return "contact"
   return prev
 }
 
@@ -137,6 +140,8 @@ type TutorDraft = {
   hourlyRateAmount: number
   lessonFormats: ("online" | "offline")[]
   availability: string[]
+  telegramUsername: string
+  phone: string
 }
 
 const defaultDraft: TutorDraft = {
@@ -156,6 +161,8 @@ const defaultDraft: TutorDraft = {
   hourlyRateAmount: 0,
   lessonFormats: [],
   availability: [],
+  telegramUsername: "",
+  phone: "",
 }
 
 type Props = {
@@ -266,6 +273,8 @@ export function TutorSignupFlow({ initialStep = "account" }: Props) {
         bio: data.bio ?? current.bio,
         hourlyRateAmount: Math.round(data.defaultHourlyRateCents / 100) || current.hourlyRateAmount,
         lessonFormats: normalizeLessonFormats(data.lessonFormats ?? current.lessonFormats),
+        telegramUsername: data.telegramUsername ?? current.telegramUsername,
+        phone: data.phone ?? current.phone,
       }))
     }).catch(() => undefined)
   }, [step])
@@ -1001,13 +1010,118 @@ export function TutorSignupFlow({ initialStep = "account" }: Props) {
               setLoading(true)
               try {
                 await saveAvailability(draft.availability)
-                go("review")
+                go("contact")
               } catch {
                 setError("Could not save availability")
               } finally {
                 setLoading(false)
               }
             }}
+            loading={loading}
+          />
+        </div>
+      ) : null}
+
+      {step === "contact" ? (
+        <div className="space-y-5">
+          <StepHeader
+            title="How can students contact you?"
+            description="Add Telegram, a phone number, or both. At least one contact is required and will appear on your public profile."
+          />
+          <FormErrorBanner message={error} />
+          <div className="space-y-4 rounded-2xl border border-slate-200 p-5 dark:border-[var(--border)]">
+            <FormField
+              label="Telegram username"
+              hint="You can enter it with or without @."
+              inputProps={{
+                id: "tutor-contact-telegram",
+                value: draft.telegramUsername,
+                placeholder: "@username",
+                autoComplete: "off",
+                onChange: (event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    telegramUsername: event.target.value,
+                  })),
+              }}
+            />
+            <div className="flex items-center gap-3 text-xs font-bold uppercase tracking-[0.18em] text-[var(--text-muted)]">
+              <span className="h-px flex-1 bg-[var(--border)]" />
+              or
+              <span className="h-px flex-1 bg-[var(--border)]" />
+            </div>
+            <FormField
+              label="Phone number"
+              hint="Include the country code, for example +7 777 123 45 67."
+              inputProps={{
+                id: "tutor-contact-phone",
+                type: "tel",
+                value: draft.phone,
+                placeholder: "+7 777 123 45 67",
+                autoComplete: "tel",
+                onChange: (event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    phone: event.target.value,
+                  })),
+              }}
+            />
+          </div>
+          <StepNavigation
+            onBack={() => go("availability", "back")}
+            onContinue={async () => {
+              const telegramUsername = draft.telegramUsername
+                .trim()
+                .replace(/^@/, "")
+              const phone = draft.phone.trim()
+
+              if (!telegramUsername && !phone) {
+                setError("Add a Telegram username or phone number")
+                return
+              }
+              if (
+                telegramUsername &&
+                !/^[A-Za-z0-9_]{5,32}$/.test(telegramUsername)
+              ) {
+                setError("Enter a valid Telegram username")
+                return
+              }
+              if (phone && phone.replace(/\D/g, "").length < 7) {
+                setError("Enter a valid phone number with country code")
+                return
+              }
+
+              setLoading(true)
+              setError(null)
+              try {
+                await persistProfile({
+                  telegramUsername,
+                  phone,
+                  preferredContactMethod:
+                    telegramUsername && phone
+                      ? "BOTH"
+                      : telegramUsername
+                        ? "TELEGRAM"
+                        : "PHONE",
+                  showTelegramPublicly: Boolean(telegramUsername),
+                  showPhonePublicly: Boolean(phone),
+                })
+                setDraft((current) => ({
+                  ...current,
+                  telegramUsername,
+                  phone,
+                }))
+                go("review")
+              } catch {
+                setError("Could not save your contact information")
+              } finally {
+                setLoading(false)
+              }
+            }}
+            continueDisabled={
+              !draft.telegramUsername.trim() && !draft.phone.trim()
+            }
+            continueLabel={loading ? "Saving…" : "Continue"}
             loading={loading}
           />
         </div>
@@ -1040,6 +1154,18 @@ export function TutorSignupFlow({ initialStep = "account" }: Props) {
                 <p className="mt-2 text-sm font-semibold">
                   {formatTenge(draft.hourlyRateAmount)}/hr
                 </p>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-[var(--text-secondary)]">
+                  {draft.telegramUsername ? (
+                    <span className="rounded-full bg-[var(--chip)] px-3 py-1.5">
+                      Telegram: @{draft.telegramUsername.replace(/^@/, "")}
+                    </span>
+                  ) : null}
+                  {draft.phone ? (
+                    <span className="rounded-full bg-[var(--chip)] px-3 py-1.5">
+                      Phone: {draft.phone}
+                    </span>
+                  ) : null}
+                </div>
               </div>
             </div>
           </div>
@@ -1056,7 +1182,7 @@ export function TutorSignupFlow({ initialStep = "account" }: Props) {
             <span>I understand my profile may require review before publication.</span>
           </label>
           <StepNavigation
-            onBack={() => go("availability", "back")}
+            onBack={() => go("contact", "back")}
             onContinue={() => void submitReview()}
             continueLabel={loading ? "Submitting…" : "Submit for review"}
             loading={loading}

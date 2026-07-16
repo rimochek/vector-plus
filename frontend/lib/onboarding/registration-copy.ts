@@ -11,6 +11,7 @@ export const TUTOR_PROGRESS_STAGES = [
   "About you",
   "Your teaching",
   "Your profile",
+  "Contact info",
   "Review",
 ] as const
 
