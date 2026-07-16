@@ -39,6 +39,10 @@ export default function LoginPage() {
     existingAccount?: boolean
     user: Parameters<typeof getDefaultRouteForUser>[0]
   }) => {
+    if (data.user?.roles?.includes("admin") || data.user?.role === "admin") {
+      router.push("/admin/tutors")
+      return
+    }
     if (data.existingAccount) {
       router.push(getDefaultRouteForUser(data.user))
       return

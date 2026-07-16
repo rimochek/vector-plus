@@ -97,6 +97,9 @@ export function getUserRoleLabel(user: StoredUser | null): string {
 export const DEFAULT_AUTH_ROUTE = "/tutors"
 
 export function getDefaultRouteForUser(user: StoredUser | null): string {
+  if (user?.roles?.includes("admin") || user?.role === "admin") {
+    return "/admin/tutors"
+  }
   const role = user?.role ?? user?.roles?.[0]
   return role === "tutor" ? "/tutor-dashboard" : DEFAULT_AUTH_ROUTE
 }
