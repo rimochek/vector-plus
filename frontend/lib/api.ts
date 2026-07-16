@@ -1,3 +1,4 @@
 export function getApiUrl(): string {
-  return process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000"
+  const value = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000"
+  return value.replace(/\/+$/, "")
 }
